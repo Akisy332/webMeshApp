@@ -1,9 +1,9 @@
-const configElement = document.getElementById('map-config');
+configElement = document.getElementById('map-config');
 
 try {
     map_config = JSON.parse(configElement.textContent);
 } catch (e) {
-    console.error('Error parsing initial view config:', e);
+    console.error('Error parsing initial map config:', e);
     map_config = {
         lat: 56.4520,
         lon:  84.9615,

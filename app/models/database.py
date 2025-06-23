@@ -148,7 +148,7 @@ class DatabaseManager:
 
     def _ensure_module_exists(self, module_id: int, 
                             default_name: Optional[str] = None, 
-                            default_color: str = "#ffffff"):
+                            default_color: str = "#ff0000"):
         """
         Проверяем существование модуля и создаем при необходимости
         """
@@ -233,39 +233,43 @@ class DatabaseManager:
             Список словарей с информацией о последних сообщениях от каждого модуля
         """
         query = """
-            SELECT d.*, m.name as module_name, m.color as module_color
-            FROM data d
-            JOIN module m ON d.id_module = m.id
-            WHERE d.id_session = ?
-            AND d.id IN (
-                SELECT MAX(id)
-                FROM data
-                WHERE id_session = ?
-                GROUP BY id_module
-            )
+            SELECT 
+            d.*, 
+            m.name as module_name, 
+            m.color as module_color,
+            mt.type as message_type
+        FROM data d
+        JOIN module m ON d.id_module = m.id
+        JOIN message_type mt ON d.id_message_type = mt.id
+        WHERE d.id_session = ?
+        AND d.id IN (
+            SELECT MAX(id)
+            FROM data
+            WHERE id_session = ?
+            GROUP BY id_module
+        )
         """
-        
-        # cursor = self.connection.cursor()
-        # cursor.execute(query, (session_id, session_id))
-        # rows = cursor.fetchall()
-        
+                
         data = self.db.execute(query, (session_id, session_id), True)
-        
+
         result = []
         for row in data:
             result.append({
                 'id': row['id'],
                 'id_module': row['id_module'],
+                'module_name': row['module_name'],
+                'module_color': row['module_color'],
                 'id_session': row['id_session'],
                 'id_message_type': row['id_message_type'],
+                'message_type': row['message_type'],
                 'datetime': row['datetime'],
-                'lat': row['lat'],
-                'lon': row['lon'],
-                'alt': row['alt'],
-                'gps_ok': row['gps_ok'],
-                'message_number': row['message_number'],
-                'module_name': row['module_name'],
-                'module_color': row['module_color']
+                'coordinates': {
+                    'lat': row['lat'],
+                    'lon': row['lon'],
+                    'alt': row['alt']
+                },
+                'gps_ok': bool(row['gps_ok']),
+                'message_number': row['message_number']
             })
         return result
     

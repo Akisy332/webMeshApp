@@ -63,10 +63,10 @@
     {{ initial_map_config | tojson | safe }}
 </script>
 
- {#<!-- получение данных иницилизации таблицы пользователей -->
-<script id="table-config" type="application/json">
-    {{ initial_table_config | tojson | safe }}
-</script>#}
+ <!-- получение данных иницилизации таблицы пользователей -->
+<script id="table-messages" type="application/json">
+    {{ initial_table_messages | tojson | safe }}
+</script>
 
 <!-- подключение скрипта иницилизации главной страницы -->
 <script

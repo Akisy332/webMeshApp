@@ -1,3 +1,15 @@
+configElement = document.getElementById('table-messages');
+
+try {
+    map_config = JSON.parse(configElement.textContent);
+} catch (e) {
+    console.error('Error parsing initial table message:', e);
+    map_config = {};
+}
+console.log(map_config)
+updateTable(map_config)
+startUpdatingTimes();
+
 // // Хранилища для маркеров и путей
 // const markers = new Map();
 // const paths = new Map();
@@ -257,144 +269,184 @@
 //     }
 // }
 
-// // Функция обновления таблицы
-// function updateTable(data) {
+// Функция обновления таблицы данными из БД
+function updateTable(messages) {
+    const tbody = document.getElementById('table-body');
+    tbody.innerHTML = '';
+
+    // Стили для статус-точки (добавьте в CSS)
+    const style = document.createElement('style');
+    style.textContent = `
+        .status-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+    `;
+    document.head.appendChild(style);
+
+    messages.forEach(message => {
+        const row = document.createElement('tr');
+        row.dataset.moduleId = message.id_module;
+
+        // Статус с цветной точкой
+        const statusCell = document.createElement('td');
+        
+        // Создаем цветную точку
+        const statusDot = document.createElement('span');
+        statusDot.className = 'status-dot';
+        
+        // Определяем цвет точки на основе статуса GPS и времени
+        const statusColor = getStatusColor(message.datetime, message.gps_ok);
+        statusDot.style.backgroundColor = statusColor;
+        
+        // Добавляем текст статуса рядом с точкой
+        const statusText = document.createElement('span');
+        statusText.textContent = message.gps_ok ? ' OK' : ' Ошибка';
+        statusText.style.color = message.gps_ok ? 'green' : 'red';
+        
+        statusCell.appendChild(statusDot);
+        statusCell.appendChild(statusText);
+        row.appendChild(statusCell);
+
+        // Чекбокс видимости маркера
+        const visibleCell = document.createElement('td');
+        const visibleCheckbox = document.createElement('input');
+        visibleCheckbox.type = 'checkbox';
+        visibleCheckbox.checked = true; // По умолчанию видим
+        visibleCheckbox.addEventListener('change', (e) => {
+            // Здесь можно добавить логику обновления видимости в БД через AJAX
+            console.log(`Visibility changed for module ${message.id_module}: ${e.target.checked}`);
+        });
+        visibleCell.appendChild(visibleCheckbox);
+        row.appendChild(visibleCell);
+
+        // Чекбокс видимости пути
+        const traceCell = document.createElement('td');
+        const traceCheckbox = document.createElement('input');
+        traceCheckbox.type = 'checkbox';
+        traceCheckbox.checked = false; // По умолчанию не показывать трассу
+        traceCheckbox.addEventListener('change', (e) => {
+            console.log(`Trace visibility changed for module ${message.id_module}: ${e.target.checked}`);
+        });
+        traceCell.appendChild(traceCheckbox);
+        row.appendChild(traceCell);
+
+        // ФИО (без возможности редактирования)
+        const nameCell = document.createElement('td');
+        nameCell.textContent = message.module_name;
+        nameCell.style.color = message.module_color;
+        row.appendChild(nameCell);
+
+        // Высота
+        const altCell = document.createElement('td');
+        altCell.textContent = `${Math.round(message.alt)} м`; // Округляем высоту
+        row.appendChild(altCell);
+
+        // Время
+        const timeCell = document.createElement('td');
+        timeCell.textContent = formatTime(message.datetime);
+        timeCell.dataset.originalTime = message.datetime;
+        row.appendChild(timeCell);
+
+        // Действия (кнопка удаления)
+        const actionsCell = document.createElement('td');
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn btn-danger btn-sm';
+        deleteBtn.textContent = 'Удалить';
+        deleteBtn.addEventListener('click', () => {
+            if (confirm(`Удалить модуль ${message.module_name}?`)) {
+                console.log(`Deleting module ${message.id_module}`);
+                // AJAX запрос для удаления из БД
+            }
+        });
+        actionsCell.appendChild(deleteBtn);
+        row.appendChild(actionsCell);
+
+        tbody.appendChild(row);
+    });
     
-//     tableData = data;
-//     const tbody = document.getElementById('table-body');
-//     tbody.innerHTML = '';
+    // // Обработчики обновлений
+    // socket.on('marker_update', function(data) {
+    //     if (data.source === 'random_marker') {
+    //         addOrUpdateMarker(data);
+    //     }
+    // });
 
-//     for (const [source, rowData] of Object.entries(data)) {
-//         console.log('Socket.IO connected', rowData);
-//         const row = document.createElement('tr');
-//         row.dataset.source = source;
+    // socket.on('path_update', function(data) {
+    //     if (data.source === 'random_marker_path') {
+    //         addOrUpdatePath(data);
+    //     }
+    // });
+}
 
-//         // Статус (цветная точка)
-//         const statusCell = document.createElement('td');
-//         const statusDot = document.createElement('span');
-//         statusDot.className = 'status-dot';
-//         statusDot.style.backgroundColor = getStatusColor(rowData.time);
-//         statusCell.appendChild(statusDot);
-//         row.appendChild(statusCell);
-
-//         // Чекбокс видимости маркера
-//         const visibleCell = document.createElement('td');
-//         const visibleCheckbox = document.createElement('input');
-//         visibleCheckbox.type = 'checkbox';
-//         visibleCheckbox.checked = rowData.visible;
-//         visibleCheckbox.addEventListener('change', (e) => {
-//             socket.emit('update_table_row', {
-//                 source: source,
-//                 changes: { visible: e.target.checked }
-//             });
-//         });
-//         visibleCell.appendChild(visibleCheckbox);
-//         row.appendChild(visibleCell);
-
-//         // Чекбокс видимости пути
-//         const traceCell = document.createElement('td');
-//         const traceCheckbox = document.createElement('input');
-//         traceCheckbox.type = 'checkbox';
-//         traceCheckbox.checked = rowData.trace;
-//         traceCheckbox.addEventListener('change', (e) => {
-//             socket.emit('update_table_row', {
-//                 source: source,
-//                 changes: { trace: e.target.checked }
-//             });
-//         });
-//         traceCell.appendChild(traceCheckbox);
-//         row.appendChild(traceCell);
-
-//         // Имя (редактируемое)
-//         const nameCell = document.createElement('td');
-//         const nameInput = document.createElement('input');
-//         nameInput.type = 'text';
-//         nameInput.value = rowData.name;
-//         nameInput.className = 'form-control form-control-sm';
-//         nameInput.addEventListener('change', (e) => {
-//             socket.emit('update_table_row', {
-//                 source: source,
-//                 changes: { name: e.target.value }
-//             });
-//         });
-//         nameCell.appendChild(nameInput);
-//         row.appendChild(nameCell);
-
-//         // Высота
-//         const altCell = document.createElement('td');
-//         altCell.textContent = `${rowData.alt} м`;
-//         row.appendChild(altCell);
-
-//         // Время
-//         const timeCell = document.createElement('td');
-//         timeCell.textContent = formatTime(rowData.time);
-//         row.appendChild(timeCell);
-
-//         // Действия (кнопка удаления)
-//         const actionsCell = document.createElement('td');
-//         const deleteBtn = document.createElement('button');
-//         deleteBtn.className = 'btn btn-danger btn-sm';
-//         deleteBtn.textContent = 'Удалить';
-//         deleteBtn.addEventListener('click', () => {
-//             if (confirm('Вы уверены, что хотите удалить эту строку?')) {
-//                 socket.emit('delete_table_row', source);
-//             }
-//         });
-//         actionsCell.appendChild(deleteBtn);
-//         row.appendChild(actionsCell);
-
-//         tbody.appendChild(row);
-//     }
+// Обновленная функция определения цвета статуса
+function getStatusColor(datetime) {   
+    if (!datetime) return 'gray';
     
-//     // Обработчики обновлений
-//     socket.on('marker_update', function(data) {
-//         if (data.source === 'random_marker') {
-//             addOrUpdateMarker(data);
-//         }
-//     });
-
-//     socket.on('path_update', function(data) {
-//         if (data.source === 'random_marker_path') {
-//             addOrUpdatePath(data);
-//         }
-//     });
-// }
-
-// // Функция определения цвета статуса
-// function getStatusColor(rowTime) {
-//     const now = Date.now() / 1000;
-//     const elapsed = now - rowTime;
+    const now = new Date();
+    const messageTime = new Date(datetime);
+    const diffSeconds = (now - messageTime) / (1000);
     
-//     if (elapsed < 60) return 'green';
-//     if (elapsed < 300) return 'yellow';
-//     return 'red';
-// }
+    if (diffSeconds < 10) return 'green';   // До 10 секунд - зеленый
+    if (diffSeconds < 60) return 'yellow'; // 10-60 секунд - желтый
+    return 'red';                          // Более минуты - красный
+}
 
-// // Форматирование времени
-// function formatTime(timestamp) {
-//     const now = Date.now() / 1000;
-//     const elapsed = Math.floor(now - timestamp);
+function formatTime(datetimeString) {
+    if (!datetimeString) return 'Н/Д';
     
-//     const minutes = Math.floor(elapsed / 60);
-//     const seconds = elapsed % 60;
-//     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-// }
+    // Преобразуем строку времени из БД в объект Date
+    const messageTime = new Date(datetimeString);
+    
+    // Проверка на валидность даты
+    if (isNaN(messageTime.getTime())) {
+        console.error('Invalid datetime string:', datetimeString);
+        return 'Н/Д';
+    }
+    
+    const now = new Date();
+    const elapsedSeconds = Math.floor((now - messageTime) / 1000);
+    
+    // Форматирование в минуты:секунды
+    const minutes = Math.floor(elapsedSeconds / 60);
+    const seconds = elapsedSeconds % 60;
+    
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
 
-// // Функция обновления времени в таблице
-// function updateTableTimes() {
-//     const rows = document.getElementById('table-body').rows;
-//     for (let i = 0; i < rows.length; i++) {
-//         const source = rows[i].dataset.source;
-//         if (tableData[source]) {
-//             const timeCell = rows[i].cells[5];
-//             timeCell.textContent = formatTime(tableData[source].time);
+// Функция обновления времени в таблице
+function updateTableTimes() {
+    const rows = document.getElementById('table-body').rows;
+    for (let i = 0; i < rows.length; i++) {
+        const source = rows[i].dataset.source;
+        if (tableData[source]) {
+            const timeCell = rows[i].cells[5];
+            timeCell.textContent = formatTime(tableData[source].time);
             
-//             // Обновляем цвет статуса
-//             const statusDot = rows[i].cells[0].querySelector('.status-dot');
-//             statusDot.style.backgroundColor = getStatusColor(tableData[source].time);
-//         }
-//     }
-// }
+            // Обновляем цвет статуса
+            const statusDot = rows[i].cells[0].querySelector('.status-dot');
+            statusDot.style.backgroundColor = getStatusColor(tableData[source].time);
+        }
+    }
+}
+
+// Функция для обновления времени каждую секунду
+function startUpdatingTimes() {
+    setInterval(() => {
+        const timeCells = document.querySelectorAll('#table-body td:nth-child(6)');
+        timeCells.forEach(cell => {
+            const originalTime = cell.dataset.originalTime;
+            if (originalTime) {
+                cell.textContent = formatTime(originalTime);
+            }
+        });
+    }, 1000);
+}
+
+
 
 // // Обработчик кнопки добавления строки
 // document.getElementById('add-row').addEventListener('click', function() {
