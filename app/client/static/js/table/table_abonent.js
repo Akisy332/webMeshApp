@@ -274,42 +274,34 @@ function updateTable(messages) {
     const tbody = document.getElementById('table-body');
     tbody.innerHTML = '';
 
-    // Стили для статус-точки (добавьте в CSS)
-    const style = document.createElement('style');
-    style.textContent = `
-        .status-dot {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 5px;
-        }
-    `;
-    document.head.appendChild(style);
-
     messages.forEach(message => {
         const row = document.createElement('tr');
         row.dataset.moduleId = message.id_module;
+        row.dataset.datetime = message.datetime;
+        row.dataset.gpsOk = message.gps_ok ? '1' : '0';
 
-        // Статус с цветной точкой
+        // Ячейка статуса
         const statusCell = document.createElement('td');
         
-        // Создаем цветную точку
+        // Контейнер для точки и подсказки
+        const container = document.createElement('div');
+        container.className = 'status-dot-container';
+        
+        // Цветная точка
         const statusDot = document.createElement('span');
-        statusDot.className = 'status-dot';
+        statusDot.className = 'status-dot dynamic-dot';
         
-        // Определяем цвет точки на основе статуса GPS и времени
-        const statusColor = getStatusColor(message.datetime, message.gps_ok);
-        statusDot.style.backgroundColor = statusColor;
+        // Подсказка
+        const tooltip = document.createElement('div');
+        tooltip.className = 'status-dot-tooltip';
         
-        // Добавляем текст статуса рядом с точкой
-        const statusText = document.createElement('span');
-        statusText.textContent = message.gps_ok ? ' OK' : ' Ошибка';
-        statusText.style.color = message.gps_ok ? 'green' : 'red';
-        
-        statusCell.appendChild(statusDot);
-        statusCell.appendChild(statusText);
+        container.appendChild(statusDot);
+        container.appendChild(tooltip);
+        statusCell.appendChild(container);
         row.appendChild(statusCell);
+
+        // Обновляем цвет и подсказку
+        updateDotColorAndTooltip(statusDot, tooltip, message.gps_ok, message.datetime);
 
         // Чекбокс видимости маркера
         const visibleCell = document.createElement('td');
@@ -367,32 +359,41 @@ function updateTable(messages) {
 
         tbody.appendChild(row);
     });
-    
-    // // Обработчики обновлений
-    // socket.on('marker_update', function(data) {
-    //     if (data.source === 'random_marker') {
-    //         addOrUpdateMarker(data);
-    //     }
-    // });
-
-    // socket.on('path_update', function(data) {
-    //     if (data.source === 'random_marker_path') {
-    //         addOrUpdatePath(data);
-    //     }
-    // });
 }
 
-// Обновленная функция определения цвета статуса
-function getStatusColor(datetime) {   
-    if (!datetime) return 'gray';
-    
+// Обновление цвета и подсказки
+function updateDotColorAndTooltip(dot, tooltip, gpsOk, datetime) {
     const now = new Date();
-    const messageTime = new Date(datetime);
-    const diffSeconds = (now - messageTime) / (1000);
-    
-    if (diffSeconds < 10) return 'green';   // До 10 секунд - зеленый
-    if (diffSeconds < 60) return 'yellow'; // 10-60 секунд - желтый
-    return 'red';                          // Более минуты - красный
+    const msgTime = new Date(datetime);
+    const diffSeconds = (now - msgTime) / 1000;
+    let color, tooltipText;
+
+    if (gpsOk) {
+        if (diffSeconds < 10) {
+            color = '#4CAF50'; // зеленый
+            tooltipText = 'Статус: Активен\nДанные свежие (<10 сек)';
+        } else if (diffSeconds < 60) {
+            color = '#FFC107'; // желтый
+            tooltipText = 'Статус: Активен\nДанные устаревают (10-60 сек)';
+        } else {
+            color = '#F44336'; // красный
+            tooltipText = 'Статус: Активен\nДанные устарели (>60 сек)';
+        }
+    } else {
+        if (diffSeconds < 10) {
+            color = '#2196F3'; // синий
+            tooltipText = 'Статус: Ошибка GPS\nНедавно (<10 сек)';
+        } else if (diffSeconds < 60) {
+            color = '#FFC107'; // желтый
+            tooltipText = 'Статус: Ошибка GPS\n10-60 сек назад';
+        } else {
+            color = '#F44336'; // красный
+            tooltipText = 'Статус: Ошибка GPS\n>60 сек назад';
+        }
+    }
+
+    dot.style.backgroundColor = color;
+    tooltip.textContent = tooltipText;
 }
 
 function formatTime(datetimeString) {
@@ -442,6 +443,12 @@ function startUpdatingTimes() {
             if (originalTime) {
                 cell.textContent = formatTime(originalTime);
             }
+        });
+        document.querySelectorAll('.dynamic-dot').forEach(dot => {
+            const row = dot.closest('tr');
+            const gpsOk = parseInt(row.dataset.gpsOk);
+            const datetime = row.dataset.datetime;
+            updateDotColor(dot, gpsOk, datetime);
         });
     }, 1000);
 }
