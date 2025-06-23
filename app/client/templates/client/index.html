@@ -58,6 +58,16 @@
 <!--  -->
 {% block scripts %}
 
+<!-- получение данных иницилизации карты -->
+<script id="map-config" type="application/json">
+    {{ initial_map_config | tojson | safe }}
+</script>
+
+ {#<!-- получение данных иницилизации таблицы пользователей -->
+<script id="table-config" type="application/json">
+    {{ initial_table_config | tojson | safe }}
+</script>#}
+
 <!-- подключение скрипта иницилизации главной страницы -->
 <script
     type="text/javascript"
@@ -65,10 +75,16 @@
 ></script>
 
 
-
 <!-- подключение скрипта карты leaflet -->
 <script
     type="text/javascript"
     src="{{ url_for('client.static', filename='js/map/map.js') }}"
 ></script>
+
+<!-- подключение скрипта таблицы пользователей -->
+<script
+    type="text/javascript"
+    src="{{ url_for('client.static', filename='js/table/table_abonent.js') }}"
+></script>
+
 {% endblock %}

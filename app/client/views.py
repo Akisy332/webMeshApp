@@ -7,6 +7,8 @@ from flask import (
 
 # from app.models.right import Right
 
+from app.models.database import DatabaseManager
+
 from flask_jwt_extended import jwt_required
 from flask_jwt_extended import get_jwt
 
@@ -25,7 +27,16 @@ def main_page():
     Главная страница сайта
     :return:
     """
-    response = make_response(render_template("client/index.html"))
+    map_config = {
+        "lat": 56.4520,
+        "lon":  84.9615,
+        "zoom": 13
+    }
+    
+    database = DatabaseManager()
+    print(database.get_last_message(0))
+    
+    response = make_response(render_template("client/index.html", initial_map_config=map_config))
     return response
 
 @client.route('/table')

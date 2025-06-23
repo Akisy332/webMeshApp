@@ -222,6 +222,53 @@ class DatabaseManager:
             fetch=True
         )
     
+    def get_last_message(self, session_id: int) -> List[Dict[str, Any]]:
+        """
+        Возвращает последнее сообщение от каждого модуля для указанной сессии.
+        
+        Args:
+            session_id: ID сессии, для которой нужно получить сообщения
+            
+        Returns:
+            Список словарей с информацией о последних сообщениях от каждого модуля
+        """
+        query = """
+            SELECT d.*, m.name as module_name, m.color as module_color
+            FROM data d
+            JOIN module m ON d.id_module = m.id
+            WHERE d.id_session = ?
+            AND d.id IN (
+                SELECT MAX(id)
+                FROM data
+                WHERE id_session = ?
+                GROUP BY id_module
+            )
+        """
+        
+        # cursor = self.connection.cursor()
+        # cursor.execute(query, (session_id, session_id))
+        # rows = cursor.fetchall()
+        
+        data = self.db.execute(query, (session_id, session_id), True)
+        
+        result = []
+        for row in data:
+            result.append({
+                'id': row['id'],
+                'id_module': row['id_module'],
+                'id_session': row['id_session'],
+                'id_message_type': row['id_message_type'],
+                'datetime': row['datetime'],
+                'lat': row['lat'],
+                'lon': row['lon'],
+                'alt': row['alt'],
+                'gps_ok': row['gps_ok'],
+                'message_number': row['message_number'],
+                'module_name': row['module_name'],
+                'module_color': row['module_color']
+            })
+        return result
+    
     def get_data_with_joins(self, limit: int = 1000) -> List[Dict[str, Any]]:
         """
         Получение данных с джойнами (оптимизированный запрос)
