@@ -1,0 +1,74 @@
+{% extends "client/base.html" %}
+
+{% block body %}
+<div class="container-fluid">
+    <!-- ##### Header Area Start ##### -->
+    <header class="header_wrapper">
+        <div class="container-fluid">
+            <div class="row justify-content-end">
+                <div class="col-auto">
+                    <button class="btn btn-outline-primary btn-sm me-2" id="auth-button">Авторизация</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="db-button">База данных</button>
+                </div>
+            </div>
+        </div>
+    </header>
+    <!-- ##### Header Area End ##### -->
+
+    <div class="row">
+        <!-- Левая колонка с картой и контролами -->
+        <div class="container-fluid vh-100 d-flex flex-column" style="padding: 0;">
+    <div class="row flex-grow-1" style="margin: 0;">
+        <!-- Левая колонка с картой (занимает оставшееся место) -->
+        <div class="col-md-8 p-0 d-flex flex-column">
+            <div id="map" class="flex-grow-1" style="min-height: 300px;"></div>
+            <div id="controls" class="p-2 bg-light">
+                <button class="btn btn-primary btn-sm" id="random-marker">Добавить случайную точку</button>
+                <button class="btn btn-success btn-sm ms-2" id="add-row">Добавить строку</button>
+            </div>
+        </div>
+        
+        <!-- Правая колонка с таблицей -->
+        <div class="col-md-4 p-0 d-flex flex-column" style="border-left: 1px solid #dee2e6;">
+            <div id="table-container" class="flex-grow-1" style="overflow-y: auto;">
+                <table id="data-table" class="table table-striped table-hover mb-0">
+                    <thead class="table-dark sticky-top">
+                        <tr>
+                            <th>Статус</th>
+                            <th>Видимость</th>
+                            <th>Трасса</th>
+                            <th>ФИО</th>
+                            <th>Высота</th>
+                            <th>Время</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <!-- Данные таблицы будут здесь -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+{% endblock %}
+<!--  -->
+{% block scripts %}
+
+<!-- подключение скрипта иницилизации главной страницы -->
+<script
+    type="text/javascript"
+    src="{{ url_for('client.static', filename='js/index/index_main.js') }}"
+></script>
+
+
+
+<!-- подключение скрипта карты leaflet -->
+<script
+    type="text/javascript"
+    src="{{ url_for('client.static', filename='js/map/map.js') }}"
+></script>
+{% endblock %}
