@@ -343,8 +343,9 @@ function createTableRow(message) {
 
     // Высота
     const altCell = document.createElement('td');
-    altCell.textContent = `${Math.round(message.alt)} м`;
+    altCell.textContent = `${Math.round(message.coordinates.alt)} м`;
     row.appendChild(altCell);
+    console.log(message)
 
     // Время
     const timeCell = document.createElement('td');
@@ -368,18 +369,38 @@ function createTableRow(message) {
 }
 
 function setupDeleteButton(button, id_module, module_name) {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
         if (confirm(`Удалить модуль ${module_name}?`)) {
-            const row = button.closest('tr');
-            const dot = row.querySelector('.status-dot');
-            
-            if (dot && dot._tooltip) {
-                bootstrap.Tooltip.getInstance(dot)?.dispose();
+            try {
+                // Отправляем запрос на сервер
+                const response = await fetch('/api/delete-module', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ id: id_module, id_session })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Ошибка при удалении модуля на сервере');
+                }
+
+                // Если сервер успешно удалил запись, удаляем строку из таблицы
+                const row = button.closest('tr');
+                const dot = row.querySelector('.status-dot');
+                
+                if (dot && dot._tooltip) {
+                    bootstrap.Tooltip.getInstance(dot)?.dispose();
+                }
+                
+                delete tableData[id_module];
+                row.remove();
+                console.log(`Модуль ${id_module} успешно удален`);
+
+            } catch (error) {
+                console.error('Ошибка при удалении модуля:', error);
+                alert('Не удалось удалить модуль. Пожалуйста, попробуйте снова.');
             }
-            
-            delete tableData[id_module];
-            row.remove();
-            console.log(`Deleting module ${id_module}`);
         }
     });
 }
@@ -492,34 +513,45 @@ function formatTime(datetimeString) {
 
 function startUpdatingTimes() {
     setInterval(() => {
-        const now = new Date(); // Получаем текущее время один раз для всех строк
+        const now = new Date();
         
         document.querySelectorAll('#table-body tr').forEach(row => {
-            const originalTime = row.dataset.datetime;
-            if (!originalTime) return;
-            
             try {
+                const originalTime = row.dataset.datetime;
+                if (!originalTime) return;
+                
                 const messageTime = new Date(originalTime);
                 if (isNaN(messageTime.getTime())) return;
                 
+                // Обновляем время
                 const elapsedSeconds = Math.floor((now - messageTime) / 1000);
                 const minutes = Math.floor(elapsedSeconds / 60);
                 const seconds = elapsedSeconds % 60;
                 const timeText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
                 
                 const timeCell = row.querySelector('td:nth-child(6)');
-                if (timeCell) {
-                    timeCell.textContent = timeText;
-                }
+                if (timeCell) timeCell.textContent = timeText;
                 
-                // Обновляем статус точки
+                // Обновляем статус без пересоздания тултипа
                 const dot = row.querySelector('.status-dot');
                 if (dot) {
                     const gpsOk = row.dataset.gpsOk === '1';
-                    updateDotAndTooltip(dot, gpsOk, originalTime);
+                    const color = getStatusColor(gpsOk, originalTime);
+                    const tooltipText = getTooltipText(gpsOk, originalTime);
+                    
+                    dot.style.backgroundColor = color;
+                    
+                    // Безопасное обновление тултипа
+                    const tooltip = bootstrap.Tooltip.getInstance(dot);
+                    if (tooltip) {
+                        dot.setAttribute('data-bs-original-title', tooltipText);
+                        tooltip._config.title = tooltipText;
+                    } else {
+                        dot.setAttribute('data-bs-title', tooltipText);
+                    }
                 }
             } catch (e) {
-                console.error('Error updating time for row:', e);
+                console.error('Error updating row:', e);
             }
         });
     }, 1000);
