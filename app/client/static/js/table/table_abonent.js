@@ -1,15 +1,3 @@
-configElement = document.getElementById('table-messages');
-
-try {
-    map_config = JSON.parse(configElement.textContent);
-} catch (e) {
-    console.error('Error parsing initial table message:', e);
-    map_config = {};
-}
-console.log(map_config)
-updateTable(map_config)
-startUpdatingTimes();
-
 // // Хранилища для маркеров и путей
 // const markers = new Map();
 // const paths = new Map();
@@ -269,140 +257,226 @@ startUpdatingTimes();
 //     }
 // }
 
-// Функция обновления таблицы данными из БД
+const configElement = document.getElementById('table-messages');
+let map_config = {};
+let tableData = {}; // Глобальное хранилище данных
+
+try {
+    map_config = JSON.parse(configElement.textContent);
+} catch (e) {
+    console.error('Error parsing initial table message:', e);
+}
+
+updateTable(map_config);
+startUpdatingTimes();
+
 function updateTable(messages) {
     const tbody = document.getElementById('table-body');
-    tbody.innerHTML = '';
-
+    
+    // Обновляем хранилище данных
     messages.forEach(message => {
-        const row = document.createElement('tr');
-        row.dataset.moduleId = message.id_module;
-        row.dataset.datetime = message.datetime;
-        row.dataset.gpsOk = message.gps_ok ? '1' : '0';
+        tableData[message.id_module] = {
+            datetime: message.datetime,
+            gps_ok: message.gps_ok,
+            alt: message.alt,
+            module_name: message.module_name,
+            module_color: message.module_color
+        };
+    });
 
-        // Ячейка статуса
-        const statusCell = document.createElement('td');
+    // Создаем или обновляем строки
+    messages.forEach(message => {
+        let row = tbody.querySelector(`tr[data-module-id="${message.id_module}"]`);
         
-        // Контейнер для точки и подсказки
-        const container = document.createElement('div');
-        container.className = 'status-dot-container';
-        
-        // Цветная точка
-        const statusDot = document.createElement('span');
-        statusDot.className = 'status-dot dynamic-dot';
-        
-        // Подсказка
-        const tooltip = document.createElement('div');
-        tooltip.className = 'status-dot-tooltip';
-        
-        container.appendChild(statusDot);
-        container.appendChild(tooltip);
-        statusCell.appendChild(container);
-        row.appendChild(statusCell);
-
-        // Обновляем цвет и подсказку
-        updateDotColorAndTooltip(statusDot, tooltip, message.gps_ok, message.datetime);
-
-        // Чекбокс видимости маркера
-        const visibleCell = document.createElement('td');
-        const visibleCheckbox = document.createElement('input');
-        visibleCheckbox.type = 'checkbox';
-        visibleCheckbox.checked = true; // По умолчанию видим
-        visibleCheckbox.addEventListener('change', (e) => {
-            // Здесь можно добавить логику обновления видимости в БД через AJAX
-            console.log(`Visibility changed for module ${message.id_module}: ${e.target.checked}`);
-        });
-        visibleCell.appendChild(visibleCheckbox);
-        row.appendChild(visibleCell);
-
-        // Чекбокс видимости пути
-        const traceCell = document.createElement('td');
-        const traceCheckbox = document.createElement('input');
-        traceCheckbox.type = 'checkbox';
-        traceCheckbox.checked = false; // По умолчанию не показывать трассу
-        traceCheckbox.addEventListener('change', (e) => {
-            console.log(`Trace visibility changed for module ${message.id_module}: ${e.target.checked}`);
-        });
-        traceCell.appendChild(traceCheckbox);
-        row.appendChild(traceCell);
-
-        // ФИО (без возможности редактирования)
-        const nameCell = document.createElement('td');
-        nameCell.textContent = message.module_name;
-        nameCell.style.color = message.module_color;
-        row.appendChild(nameCell);
-
-        // Высота
-        const altCell = document.createElement('td');
-        altCell.textContent = `${Math.round(message.alt)} м`; // Округляем высоту
-        row.appendChild(altCell);
-
-        // Время
-        const timeCell = document.createElement('td');
-        timeCell.textContent = formatTime(message.datetime);
-        timeCell.dataset.originalTime = message.datetime;
-        row.appendChild(timeCell);
-
-        // Действия (кнопка удаления)
-        const actionsCell = document.createElement('td');
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'btn btn-danger btn-sm';
-        deleteBtn.textContent = 'Удалить';
-        deleteBtn.addEventListener('click', () => {
-            if (confirm(`Удалить модуль ${message.module_name}?`)) {
-                console.log(`Deleting module ${message.id_module}`);
-                // AJAX запрос для удаления из БД
-            }
-        });
-        actionsCell.appendChild(deleteBtn);
-        row.appendChild(actionsCell);
-
-        tbody.appendChild(row);
+        if (!row) {
+            row = createTableRow(message);
+            tbody.appendChild(row);
+            initTooltip(row.querySelector('.status-dot'));
+        } else {
+            updateRowData(row, message);
+        }
     });
 }
 
-// Обновление цвета и подсказки
-function updateDotColorAndTooltip(dot, tooltip, gpsOk, datetime) {
+function createTableRow(message) {
+    const row = document.createElement('tr');
+    row.dataset.moduleId = message.id_module;
+    row.dataset.datetime = message.datetime;
+    row.dataset.gpsOk = message.gps_ok ? '1' : '0';
+
+    // Ячейка статуса
+    const statusCell = document.createElement('td');
+    const statusDot = document.createElement('span');
+    statusDot.className = 'status-dot dynamic-dot';
+    statusDot.dataset.bsToggle = 'tooltip';
+    statusDot.dataset.bsPlacement = 'top';
+    statusCell.appendChild(statusDot);
+    row.appendChild(statusCell);
+
+    // Чекбокс видимости
+    const visibleCell = document.createElement('td');
+    const visibleCheckbox = document.createElement('input');
+    visibleCheckbox.type = 'checkbox';
+    visibleCheckbox.checked = true;
+    visibleCheckbox.addEventListener('change', (e) => {
+        console.log(`Visibility changed for module ${message.id_module}: ${e.target.checked}`);
+    });
+    visibleCell.appendChild(visibleCheckbox);
+    row.appendChild(visibleCell);
+
+    // Чекбокс трассы
+    const traceCell = document.createElement('td');
+    const traceCheckbox = document.createElement('input');
+    traceCheckbox.type = 'checkbox';
+    traceCheckbox.checked = false;
+    traceCheckbox.addEventListener('change', (e) => {
+        console.log(`Trace visibility changed for module ${message.id_module}: ${e.target.checked}`);
+    });
+    traceCell.appendChild(traceCheckbox);
+    row.appendChild(traceCell);
+
+    // ФИО
+    const nameCell = document.createElement('td');
+    nameCell.textContent = message.module_name;
+    nameCell.style.color = message.module_color;
+    row.appendChild(nameCell);
+
+    // Высота
+    const altCell = document.createElement('td');
+    altCell.textContent = `${Math.round(message.alt)} м`;
+    row.appendChild(altCell);
+
+    // Время
+    const timeCell = document.createElement('td');
+    timeCell.textContent = formatTime(message.datetime);
+    timeCell.dataset.originalTime = message.datetime;
+    row.appendChild(timeCell);
+
+    // Действия
+    const actionsCell = document.createElement('td');
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn btn-danger btn-sm';
+    deleteBtn.textContent = 'Удалить';
+    setupDeleteButton(deleteBtn, message.id_module, message.module_name);
+    actionsCell.appendChild(deleteBtn);
+    row.appendChild(actionsCell);
+
+    // Первоначальное обновление статуса
+    updateDotAndTooltip(statusDot, message.gps_ok, message.datetime);
+
+    return row;
+}
+
+function setupDeleteButton(button, id_module, module_name) {
+    button.addEventListener('click', () => {
+        if (confirm(`Удалить модуль ${module_name}?`)) {
+            const row = button.closest('tr');
+            const dot = row.querySelector('.status-dot');
+            
+            if (dot && dot._tooltip) {
+                bootstrap.Tooltip.getInstance(dot)?.dispose();
+            }
+            
+            delete tableData[id_module];
+            row.remove();
+            console.log(`Deleting module ${id_module}`);
+        }
+    });
+}
+
+function initTooltip(element) {
+    if (element && !element._tooltip) {
+        new bootstrap.Tooltip(element, {
+            trigger: 'hover focus',
+            title: element.dataset.bsTitle
+        });
+    }
+}
+
+function updateRowData(row, message) {
+    tableData[message.id_module] = {
+        datetime: message.datetime,
+        gps_ok: message.gps_ok,
+        alt: message.alt,
+        module_name: message.module_name,
+        module_color: message.module_color
+    };
+    
+    row.dataset.datetime = message.datetime;
+    row.dataset.gpsOk = message.gps_ok ? '1' : '0';
+    
+    const dot = row.querySelector('.status-dot');
+    if (dot) {
+        updateDotAndTooltip(dot, message.gps_ok, message.datetime);
+    }
+    
+    const altCell = row.querySelector('td:nth-child(5)');
+    if (altCell) {
+        altCell.textContent = `${Math.round(message.alt)} м`;
+    }
+    
+    const timeCell = row.querySelector('td:nth-child(6)');
+    if (timeCell) {
+        timeCell.textContent = formatTime(message.datetime);
+        timeCell.dataset.originalTime = message.datetime;
+    }
+    
+    const nameCell = row.querySelector('td:nth-child(4)');
+    if (nameCell) {
+        nameCell.textContent = message.module_name;
+        nameCell.style.color = message.module_color;
+    }
+}
+
+function updateDotAndTooltip(dot, gpsOk, datetime) {
+    const tooltipText = getTooltipText(gpsOk, datetime);
+    const color = getStatusColor(gpsOk, datetime);
+    
+    dot.style.backgroundColor = color;
+    dot.dataset.bsTitle = tooltipText;
+    
+    const tooltip = bootstrap.Tooltip.getInstance(dot);
+    if (tooltip) {
+        tooltip.setContent({ '.tooltip-inner': tooltipText });
+    }
+}
+
+function getStatusColor(gpsOk, datetime) {
     const now = new Date();
     const msgTime = new Date(datetime);
     const diffSeconds = (now - msgTime) / 1000;
-    let color, tooltipText;
-
+    
     if (gpsOk) {
-        if (diffSeconds < 10) {
-            color = '#4CAF50'; // зеленый
-            tooltipText = 'Статус: Активен\nДанные свежие (<10 сек)';
-        } else if (diffSeconds < 60) {
-            color = '#FFC107'; // желтый
-            tooltipText = 'Статус: Активен\nДанные устаревают (10-60 сек)';
-        } else {
-            color = '#F44336'; // красный
-            tooltipText = 'Статус: Активен\nДанные устарели (>60 сек)';
-        }
+        if (diffSeconds < 10) return '#4CAF50';
+        if (diffSeconds < 60) return '#FFC107';
+        return '#F44336';
     } else {
-        if (diffSeconds < 10) {
-            color = '#2196F3'; // синий
-            tooltipText = 'Статус: Ошибка GPS\nНедавно (<10 сек)';
-        } else if (diffSeconds < 60) {
-            color = '#FFC107'; // желтый
-            tooltipText = 'Статус: Ошибка GPS\n10-60 сек назад';
-        } else {
-            color = '#F44336'; // красный
-            tooltipText = 'Статус: Ошибка GPS\n>60 сек назад';
-        }
+        if (diffSeconds < 10) return '#2196F3';
+        if (diffSeconds < 60) return '#FFC107';
+        return '#F44336';
     }
+}
 
-    dot.style.backgroundColor = color;
-    tooltip.textContent = tooltipText;
+function getTooltipText(gpsOk, datetime) {
+    const now = new Date();
+    const msgTime = new Date(datetime);
+    const diffSeconds = (now - msgTime) / 1000;
+    
+    if (gpsOk) {
+        if (diffSeconds < 10) return 'Статус: Активен\nДанные свежие (<10 сек)';
+        if (diffSeconds < 60) return 'Статус: Активен\nДанные устаревают (10-60 сек)';
+        return 'Статус: Активен\nДанные устарели (>60 сек)';
+    } else {
+        if (diffSeconds < 10) return 'Статус: Ошибка GPS\nНедавно (<10 сек)';
+        if (diffSeconds < 60) return 'Статус: Ошибка GPS\n10-60 сек назад';
+        return 'Статус: Ошибка GPS\n>60 сек назад';
+    }
 }
 
 function formatTime(datetimeString) {
     if (!datetimeString) return 'Н/Д';
     
-    // Преобразуем строку времени из БД в объект Date
     const messageTime = new Date(datetimeString);
-    
-    // Проверка на валидность даты
     if (isNaN(messageTime.getTime())) {
         console.error('Invalid datetime string:', datetimeString);
         return 'Н/Д';
@@ -410,49 +484,46 @@ function formatTime(datetimeString) {
     
     const now = new Date();
     const elapsedSeconds = Math.floor((now - messageTime) / 1000);
-    
-    // Форматирование в минуты:секунды
     const minutes = Math.floor(elapsedSeconds / 60);
     const seconds = elapsedSeconds % 60;
     
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-// Функция обновления времени в таблице
-function updateTableTimes() {
-    const rows = document.getElementById('table-body').rows;
-    for (let i = 0; i < rows.length; i++) {
-        const source = rows[i].dataset.source;
-        if (tableData[source]) {
-            const timeCell = rows[i].cells[5];
-            timeCell.textContent = formatTime(tableData[source].time);
-            
-            // Обновляем цвет статуса
-            const statusDot = rows[i].cells[0].querySelector('.status-dot');
-            statusDot.style.backgroundColor = getStatusColor(tableData[source].time);
-        }
-    }
-}
-
-// Функция для обновления времени каждую секунду
 function startUpdatingTimes() {
     setInterval(() => {
-        const timeCells = document.querySelectorAll('#table-body td:nth-child(6)');
-        timeCells.forEach(cell => {
-            const originalTime = cell.dataset.originalTime;
-            if (originalTime) {
-                cell.textContent = formatTime(originalTime);
+        const now = new Date(); // Получаем текущее время один раз для всех строк
+        
+        document.querySelectorAll('#table-body tr').forEach(row => {
+            const originalTime = row.dataset.datetime;
+            if (!originalTime) return;
+            
+            try {
+                const messageTime = new Date(originalTime);
+                if (isNaN(messageTime.getTime())) return;
+                
+                const elapsedSeconds = Math.floor((now - messageTime) / 1000);
+                const minutes = Math.floor(elapsedSeconds / 60);
+                const seconds = elapsedSeconds % 60;
+                const timeText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                
+                const timeCell = row.querySelector('td:nth-child(6)');
+                if (timeCell) {
+                    timeCell.textContent = timeText;
+                }
+                
+                // Обновляем статус точки
+                const dot = row.querySelector('.status-dot');
+                if (dot) {
+                    const gpsOk = row.dataset.gpsOk === '1';
+                    updateDotAndTooltip(dot, gpsOk, originalTime);
+                }
+            } catch (e) {
+                console.error('Error updating time for row:', e);
             }
-        });
-        document.querySelectorAll('.dynamic-dot').forEach(dot => {
-            const row = dot.closest('tr');
-            const gpsOk = parseInt(row.dataset.gpsOk);
-            const datetime = row.dataset.datetime;
-            updateDotColor(dot, gpsOk, datetime);
         });
     }, 1000);
 }
-
 
 
 // // Обработчик кнопки добавления строки
