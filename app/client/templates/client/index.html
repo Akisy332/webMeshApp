@@ -77,33 +77,28 @@
 <!--  -->
 {% block scripts %}
 
-<!-- получение данных иницилизации карты -->
-<script id="map-config" type="application/json">
-    {{ initial_map_config | tojson | safe }}
-</script>
-
- <!-- получение данных иницилизации таблицы пользователей -->
-<script id="table-messages" type="application/json">
-    {{ initial_table_messages | tojson | safe }}
-</script>
-
-<!-- подключение скрипта иницилизации главной страницы -->
-<script
-    type="text/javascript"
-    src="{{ url_for('client.static', filename='js/index/index_main.js') }}"
-></script>
-
-
 <!-- подключение скрипта карты leaflet -->
 <script
     type="text/javascript"
-    src="{{ url_for('client.static', filename='js/map/map.js') }}"
+    src="{{ url_for('client.static', filename='js/map/MapManager.js') }}"
 ></script>
 
 <!-- подключение скрипта таблицы пользователей -->
 <script
     type="text/javascript"
-    src="{{ url_for('client.static', filename='js/table/table_abonent.js') }}"
+    src="{{ url_for('client.static', filename='js/table/TableManager.js') }}"
+></script>
+
+<!-- подключение скрипта управление картой через таблицу пользователей -->
+<script
+    type="text/javascript"
+    src="{{ url_for('client.static', filename='js/MapTableConnector.js') }}"
+></script>
+
+<!-- подключение скрипта иницилизации главной страницы -->
+<script
+    type="text/javascript"
+    src="{{ url_for('client.static', filename='js/index/index_main.js') }}"
 ></script>
 
 {% endblock %}

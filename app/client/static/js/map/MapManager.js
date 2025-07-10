@@ -1,30 +1,105 @@
-configElement = document.getElementById('map-config');
+"use strict";
 
-try {
-    map_config = JSON.parse(configElement.textContent);
-} catch (e) {
-    console.error('Error parsing initial map config:', e);
-    map_config = {
-        lat: 56.4520,
-        lon:  84.9615,
-        zoom: 13
-    };
+class MapManager {
+    constructor(mapId) {
+        // const configElement = document.getElementById('map-config');
+
+        // try {
+            // map_config = JSON.parse(configElement.textContent);
+        // } catch (e) {
+            // console.error('Error parsing initial map config:', e);
+            const map_config = {
+                lat: 56.4520,
+                lon:  84.9615,
+                zoom: 13
+            };
+        // }
+
+        // Initialize map
+        this.map = L.map(mapId).setView(
+            [map_config.lat, map_config.lon],
+            map_config.zoom
+        );
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(this.map);
+
+        // Хранилища для слоев, маркеров и путей
+        this.layers = {};
+        this.markers = new Map();
+        this.paths = new Map();
+        // Инициализация карты
+
+        document.addEventListener('changeVisibleMarker', (e) => {
+            this.setMarkerVisible(e.detail.id, e.detail.flag);
+        });
+    }
+    
+    // addLayer(layerId, geoJson) {
+    //     this.layers[layerId] = L.geoJSON(geoJson).addTo(this.map);
+    // }
+    
+    // focusOnLayer(layerId) {
+    //     // Логика фокусировки
+    // }
+    
+    // Установка позиции карты и приближения
+    setPosition(data){
+        this.map.setView([data.lat, data.lon], data.zoom)
+    }
+
+    // Функция работы с маркерам
+    addOrUpdateMarker(data) {
+        if (!data || !data.id_module) return;
+        
+        let marker = this.markers.get(data.id_module);
+        const latlng = [data.coordinates.lat, data.coordinates.lon];
+        
+        if (marker) {
+            marker.setLatLng(latlng);
+            marker.setPopupContent(data.module_name || data.id_module);
+            marker.setIcon(this.createCustomIcon(data.module_color || '#FF0000'));
+
+        } else {
+            console.log("Create marker", data.id_module)
+            marker = L.marker(latlng, {
+                icon: this.createCustomIcon(data.module_color || '#FF0000')
+            }).bindPopup(data.module_name || data.id_module);
+
+            marker.addTo(this.map);
+            
+            this.markers.set(data.id_module, marker);
+        }
+    }
+
+    setMarkerVisible(id_module, flag) {
+        let marker = this.markers.get(id_module);
+        if (flag && !this.map.hasLayer(marker)) {
+                marker.addTo(this.map);
+            } else if (!flag && this.map.hasLayer(marker)) {
+                this.map.removeLayer(marker);
+            }
+    }
+
+    createCustomIcon(color) {
+        return L.divIcon({
+            className: 'custom-marker',
+            html: `<svg width="48" height="48" viewBox="0 0 24 24">
+                <path fill="${color}" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>`,
+            iconSize: [48, 48],  // Increased size from 24x24 to 48x48
+            iconAnchor: [24, 48],  // Anchor at bottom middle (half of width, full height)
+            popupAnchor: [0, -48]  // Optional: adjust popup position if needed
+        });
+    }
+
 }
 
-// Initialize map
-const map = L.map('map').setView(
-    [map_config.lat, map_config.lon],
-    map_config.zoom
-);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 19
-}).addTo(map);
 
-// Хранилища для маркеров и путей
-const markers = new Map();
-const paths = new Map();
+
 
 
 // Инициализация карты
@@ -40,51 +115,10 @@ function handleMapInit(data) {
     // if (data.paths) {
         // data.paths.forEach(path => addOrUpdatePath(path));
     // }
+
 }
 
-// Функция работы с маркерам
-function addOrUpdateMarker(data) {
-    if (!data || !data.source) return;
-    
-    let marker = markers.get(data.source);
-    const latlng = [data.lat, data.lon];
-    
-    if (marker) {
-        marker.setLatLng(latlng);
-        marker.setPopupContent(data.text || data.source);
-        marker.setIcon(createCustomIcon(data.color || '#FF0000'));
-        
-        if (data.visible && !map.hasLayer(marker)) {
-            marker.addTo(map);
-        } else if (!data.visible && map.hasLayer(marker)) {
-            map.removeLayer(marker);
-        }
-    } else {
-        marker = L.marker(latlng, {
-            icon: createCustomIcon(data.color || '#FF0000')
-        }).bindPopup(data.text || data.source);
-        
-        if (data.visible !== false) {
-            marker.addTo(map);
-        }
-        
-        markers.set(data.source, marker);
-    }
-    // Если это новый случайный маркер, добавляем его в таблицу
-    if (data.source.startsWith('random_marker_') && !tableData[data.source]) {
-        const tableUpdate = {
-            ...tableData,
-            [data.source]: {
-                name: data.text || data.source,
-                alt: Math.floor(Math.random() * 1000),
-                time: Date.now() / 1000,
-                visible: true,
-                trace: true
-            }
-        };
-        updateTable(tableUpdate);
-    }
-}
+
 
 // function addOrUpdatePath(data) {
 //     if (!data || !data.source || !data.coords) return;
@@ -113,16 +147,6 @@ function addOrUpdateMarker(data) {
 //     //     }
 // }
 
-// function createCustomIcon(color) {
-//     return L.divIcon({
-//         className: 'custom-marker',
-//         html: `<svg width="24" height="24" viewBox="0 0 24 24">
-//             <path fill="${color}" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-//         </svg>`,
-//         iconSize: [24, 24],
-//         iconAnchor: [12, 24]
-//     });
-// }
 
 
 

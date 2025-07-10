@@ -159,7 +159,7 @@ class DatabaseManager:
         )
         
         if not exists:
-            name = default_name or f"Module_{module_id}"
+            name = default_name or format(module_id, 'X')
             self.db.execute(
                 "INSERT INTO module (id, name, color) VALUES (?, ?, ?)",
                 params=(module_id, name, default_color)
@@ -282,7 +282,7 @@ class DatabaseManager:
             
             result.append({
                 'id': row['id'],
-                'id_module': row['id_module'],
+                'id_module': format(row['id_module'], 'X'),
                 'module_name': row['module_name'],
                 'module_color': row['module_color'],
                 'id_session': row['id_session'],
