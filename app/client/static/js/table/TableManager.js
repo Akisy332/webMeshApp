@@ -61,12 +61,10 @@ class TableManager {
         visibleCheckbox.checked = true;
         visibleCheckbox.addEventListener('change', (e) => {
             console.log(`Visibility changed for module ${message.id_module}: ${e.target.checked}`);
-            this.dispatchEvent(new CustomEvent('changeVisibleMarker', {
-                detail: {
-                    id: message.id_module,
-                    flag: e.target.checked
-                }
-            }));
+            eventManager.emit('changeVisibleMarker', {
+                id: message.id_module,
+                flag: e.target.checked
+            });
         });
         visibleCell.appendChild(visibleCheckbox);
         row.appendChild(visibleCell);

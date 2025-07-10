@@ -77,6 +77,12 @@
 <!--  -->
 {% block scripts %}
 
+<!-- подключение скрипта для управления своими Events -->
+<script
+    type="text/javascript"
+    src="{{ url_for('client.static', filename='js/EventManager.js') }}"
+></script>
+
 <!-- подключение скрипта карты leaflet -->
 <script
     type="text/javascript"

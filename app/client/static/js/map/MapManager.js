@@ -32,8 +32,8 @@ class MapManager {
         this.paths = new Map();
         // Инициализация карты
 
-        document.addEventListener('changeVisibleMarker', (e) => {
-            this.setMarkerVisible(e.detail.id, e.detail.flag);
+        eventManager.on('changeVisibleMarker', data => {
+            this.setMarkerVisible(data.id, data.flag);
         });
     }
     
@@ -97,55 +97,32 @@ class MapManager {
 
 }
 
-
-
-
-
-
-// Инициализация карты
-function handleMapInit(data) {
-    if (data.view) {
-        map.setView([data.view.lat, data.view.lon], data.view.zoom);
-    }
+function addOrUpdatePath(data) {
+    if (!data || !data.source || !data.coords) return;
     
-    if (data.markers) {
-        data.markers.forEach(marker => addOrUpdateMarker(marker));
-    }
+    let path = paths.get(data.source);
     
-    // if (data.paths) {
-        // data.paths.forEach(path => addOrUpdatePath(path));
-    // }
-
-}
-
-
-
-// function addOrUpdatePath(data) {
-//     if (!data || !data.source || !data.coords) return;
-    
-//     let path = paths.get(data.source);
-    
-//     if (path) {
-//         path.setLatLngs(data.coords);
-//         path.setStyle({
-//             color: data.color || '#0000FF',
-//             weight: data.width || 2
-//         });
-//     } else {
-//         path = L.polyline(data.coords, {
-//             color: data.color || '#0000FF',
-//             weight: data.width || 2
-//         }).addTo(map);
+    if (path) {
+        path.setLatLngs(data.coords);
+        path.setStyle({
+            color: data.color || '#0000FF',
+            weight: data.width || 2
+        });
+    } else {
+        path = L.polyline(data.coords, {
+            color: data.color || '#0000FF',
+            weight: data.width || 2
+        }).addTo(map);
         
-//         paths.set(data.source, path);
-//     }
-//     console.log(data)
-//     // if (data.visible && !map.hasLayer(path)) {
-//     //         path.addTo(map);
-//     //     } else if (!data.visible && map.hasLayer(path)) {
-//     //         map.removeLayer(path);
-//     //     }
-// }
+        paths.set(data.source, path);
+    }
+    console.log(data)
+    // if (data.visible && !map.hasLayer(path)) {
+    //         path.addTo(map);
+    //     } else if (!data.visible && map.hasLayer(path)) {
+    //         map.removeLayer(path);
+    //     }
+}
 
 
 
