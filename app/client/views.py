@@ -36,7 +36,9 @@ def main_page():
     database = DatabaseManager()
     last_messages = database.get_last_message(1)
     
-    response = make_response(render_template("client/index.html", initial_map_config=map_config, initial_table_messages=last_messages))
+    response = make_response(render_template("client/index.html", 
+                                             initial_map_config=map_config, 
+                                             initial_table_messages=last_messages))
     return response
 
 @client.route('/table')

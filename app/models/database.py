@@ -86,7 +86,7 @@ class DatabaseManager:
                 raise ValueError("Недостаточно данных в строке")
             
             message_type_code = int(parts[0])
-            module_id = int(parts[1])
+            module_id = int(parts[1], 16)
             lat, lon, alt = parts[2:5]
             message_number = int(parts[9])
             
@@ -225,6 +225,7 @@ class DatabaseManager:
     def get_last_message(self, session_id: int) -> List[Dict[str, Any]]:
         """
         Возвращает последнее сообщение от каждого модуля для указанной сессии.
+        Если координаты в сообщении NULL, берёт их из предыдущего сообщения где они были указаны.
         
         Args:
             session_id: ID сессии, для которой нужно получить сообщения
@@ -232,28 +233,53 @@ class DatabaseManager:
         Returns:
             Список словарей с информацией о последних сообщениях от каждого модуля
         """
-        query = """
+        # Сначала получаем последние сообщения от каждого модуля
+        last_messages_query = """
             SELECT 
-            d.*, 
-            m.name as module_name, 
-            m.color as module_color,
-            mt.type as message_type
-        FROM data d
-        JOIN module m ON d.id_module = m.id
-        JOIN message_type mt ON d.id_message_type = mt.id
-        WHERE d.id_session = ?
-        AND d.id IN (
-            SELECT MAX(id)
-            FROM data
-            WHERE id_session = ?
-            GROUP BY id_module
-        )
+                d.*, 
+                m.name as module_name, 
+                m.color as module_color,
+                mt.type as message_type
+            FROM data d
+            JOIN module m ON d.id_module = m.id
+            JOIN message_type mt ON d.id_message_type = mt.id
+            WHERE d.id_session = ?
+            AND d.id IN (
+                SELECT MAX(id)
+                FROM data
+                WHERE id_session = ?
+                GROUP BY id_module
+            )
         """
-                
-        data = self.db.execute(query, (session_id, session_id), True)
-
+        
+        last_messages = self.db.execute(last_messages_query, (session_id, session_id), True)
+        
+        # Теперь для каждого модуля находим последние координаты (если в текущем сообщении их нет)
         result = []
-        for row in data:
+        for row in last_messages:
+            lat, lon, alt = row['lat'], row['lon'], row['alt']
+            
+            # Если координаты отсутствуют в текущем сообщении, ищем предыдущие
+            if lat is None or lon is None:
+                coord_query = """
+                    SELECT lat, lon, alt 
+                    FROM data 
+                    WHERE id_session = ? 
+                    AND id_module = ?
+                    AND lat IS NOT NULL 
+                    AND lon IS NOT NULL
+                    ORDER BY id DESC
+                    LIMIT 1
+                """
+                coord_data = self.db.execute(coord_query, (session_id, row['id_module']), True)
+                if coord_data:
+                    if lat is None:
+                        lat = coord_data[0]['lat']
+                    if lon is None:
+                        lon = coord_data[0]['lon']
+                    if alt is None:
+                        alt = coord_data[0]['alt']
+            
             result.append({
                 'id': row['id'],
                 'id_module': row['id_module'],
@@ -264,13 +290,14 @@ class DatabaseManager:
                 'message_type': row['message_type'],
                 'datetime': row['datetime'],
                 'coordinates': {
-                    'lat': row['lat'],
-                    'lon': row['lon'],
-                    'alt': row['alt']
+                    'lat': lat,
+                    'lon': lon,
+                    'alt': alt if alt is not None else 0.0  # Можно установить значение по умолчанию для alt
                 },
                 'gps_ok': bool(row['gps_ok']),
                 'message_number': row['message_number']
             })
+        
         return result
     
     def get_data_with_joins(self, limit: int = 1000) -> List[Dict[str, Any]]:
