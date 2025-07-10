@@ -222,6 +222,42 @@ class DatabaseManager:
             fetch=True
         )
     
+    def get_module_coordinates(
+        self, 
+        id_module: int,     
+        id_session: int, 
+        id_message_type: Optional[int] = None
+    ) -> List[Tuple[float, float]]:
+        """
+        Возвращает список координат (lat, lon) модуля для указанной сессии
+        
+        :param id_module: ID модуля
+        :param id_session: ID сессии
+        :param id_message_type: Опциональный фильтр по типу сообщения
+        :return: Список кортежей с координатами (lat, lon)
+                 Возвращает только записи с валидными координатами (gps_ok=1)
+        """
+        query = """
+            SELECT lat, lon
+            FROM data
+            WHERE id_module = ? 
+              AND id_session = ?
+              AND gps_ok = 1
+              AND lat IS NOT NULL
+              AND lon IS NOT NULL
+        """
+
+        params = [id_module, id_session]
+
+        if id_message_type is not None:
+            query += " AND id_message_type = ?"
+            params.append(id_message_type)
+            
+        query += " ORDER BY datetime ASC"
+
+        result = self.db.execute(query, params=tuple(params), fetch=True)
+        return [(row['lat'], row['lon']) for row in result]
+    
     def get_last_message(self, session_id: int) -> List[Dict[str, Any]]:
         """
         Возвращает последнее сообщение от каждого модуля для указанной сессии.

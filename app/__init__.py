@@ -50,10 +50,10 @@ from app.api.database.views import database
 
 app.register_blueprint(database)
 
-# # здесь будет api/storage системы
-# from app.api.storage.views import storage
+# здесь будет api/storage системы
+from app.api.map.views import map
 
-# app.register_blueprint(storage)
+app.register_blueprint(map)
 
 # # здесь будет api/user системы
 # from app.api.user.views import user

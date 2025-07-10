@@ -76,6 +76,10 @@ class TableManager {
         traceCheckbox.checked = false;
         traceCheckbox.addEventListener('change', (e) => {
             console.log(`Trace visibility changed for module ${message.id_module}: ${e.target.checked}`);
+            eventManager.emit('changeVisibleTrace', {
+                id: message.id_module,
+                flag: e.target.checked
+            });
         });
         traceCell.appendChild(traceCheckbox);
         row.appendChild(traceCell);

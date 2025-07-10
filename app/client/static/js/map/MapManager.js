@@ -2,18 +2,12 @@
 
 class MapManager {
     constructor(mapId) {
-        // const configElement = document.getElementById('map-config');
 
-        // try {
-            // map_config = JSON.parse(configElement.textContent);
-        // } catch (e) {
-            // console.error('Error parsing initial map config:', e);
-            const map_config = {
-                lat: 56.4520,
-                lon:  84.9615,
-                zoom: 13
-            };
-        // }
+        const map_config = {
+            lat: 56.4520,
+            lon:  84.9615,
+            zoom: 13
+        };
 
         // Initialize map
         this.map = L.map(mapId).setView(
@@ -30,27 +24,20 @@ class MapManager {
         this.layers = {};
         this.markers = new Map();
         this.paths = new Map();
-        // Инициализация карты
+
 
         eventManager.on('changeVisibleMarker', data => {
             this.setMarkerVisible(data.id, data.flag);
         });
+        eventManager.on('changeVisibleTrace', (data) => {
+            this.setTraceVisible(data.id, data.flag);
+        });
     }
     
-    // addLayer(layerId, geoJson) {
-    //     this.layers[layerId] = L.geoJSON(geoJson).addTo(this.map);
-    // }
-    
-    // focusOnLayer(layerId) {
-    //     // Логика фокусировки
-    // }
-    
-    // Установка позиции карты и приближения
     setPosition(data){
         this.map.setView([data.lat, data.lon], data.zoom)
     }
 
-    // Функция работы с маркерам
     addOrUpdateMarker(data) {
         if (!data || !data.id_module) return;
         
@@ -77,10 +64,23 @@ class MapManager {
     setMarkerVisible(id_module, flag) {
         let marker = this.markers.get(id_module);
         if (flag && !this.map.hasLayer(marker)) {
-                marker.addTo(this.map);
-            } else if (!flag && this.map.hasLayer(marker)) {
-                this.map.removeLayer(marker);
-            }
+            marker.addTo(this.map);
+        } else if (!flag && this.map.hasLayer(marker)) {
+            this.map.removeLayer(marker);
+        }
+    }
+
+    async setTraceVisible(id_module, flag) {
+        let path = this.paths.get(id_module);
+        if (!path) {
+            const response = await this.getTraceModule(id_module, 1, 1)
+            this.addOrUpdateTrace(response)
+        } else if (flag && !this.map.hasLayer(path)) {
+            path.addTo(this.map);
+        } else if (!flag && this.map.hasLayer(path)) {
+            this.map.removeLayer(path);
+        }
+
     }
 
     createCustomIcon(color) {
@@ -95,34 +95,72 @@ class MapManager {
         });
     }
 
+    addOrUpdateTrace(data) {
+        console.log(data)
+        if (!data || !data.id_module || !data.coords) return;
+        
+        // Получаем текущий путь
+        let path = this.paths.get(data.id_module);
+        
+        // Если coords - массив массивов (множество точек)
+        const coords = Array.isArray(data.coords[0]) && 
+                      (typeof data.coords[0][0] === 'number' || Array.isArray(data.coords[0][0])) 
+                      ? data.coords 
+                      : [data.coords];
+        
+        if (path) {
+            // Если путь существует, обновляем его координаты
+            const currentCoords = path.getLatLngs();
+            const newCoords = [...currentCoords, ...coords];
+            path.setLatLngs(newCoords);
+
+            path.setStyle({
+                color: data.color || '#FF0000',
+                weight: data.width || 2
+            });
+        } else {
+            console.log("Create Trace for marker ", data.id_module)
+            // Создаем новый путь со всеми координатами
+            path = L.polyline(coords, {
+                color: data.color || '#FF0000',
+                weight: data.width || 2
+            }).addTo(this.map);
+
+            this.paths.set(data.id_module, path);
+        }
+    }
+
+    async getTraceModule(id_Module, id_Session, id_Message_Type) {
+        try {
+            // Формируем URL с параметрами
+            const url = new URL('/get_trace_module', window.location.origin);
+            url.searchParams.append('id_module', id_Module);
+            url.searchParams.append('id_session', id_Session);
+            url.searchParams.append('id_message_type', id_Message_Type);
+
+            // Отправляем GET-запрос
+            const response = await fetch(url.toString(), {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`Ошибка HTTP: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('Получены данные:', data);
+            return data;
+        } catch (error) {
+            console.error('Ошибка при запросе данных:', error);
+            throw error;
+        }
+    }
 }
 
-function addOrUpdatePath(data) {
-    if (!data || !data.source || !data.coords) return;
-    
-    let path = paths.get(data.source);
-    
-    if (path) {
-        path.setLatLngs(data.coords);
-        path.setStyle({
-            color: data.color || '#0000FF',
-            weight: data.width || 2
-        });
-    } else {
-        path = L.polyline(data.coords, {
-            color: data.color || '#0000FF',
-            weight: data.width || 2
-        }).addTo(map);
-        
-        paths.set(data.source, path);
-    }
-    console.log(data)
-    // if (data.visible && !map.hasLayer(path)) {
-    //         path.addTo(map);
-    //     } else if (!data.visible && map.hasLayer(path)) {
-    //         map.removeLayer(path);
-    //     }
-}
+
 
 
 
