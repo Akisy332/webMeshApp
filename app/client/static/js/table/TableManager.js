@@ -61,7 +61,7 @@ class TableManager {
         visibleCheckbox.checked = true;
         visibleCheckbox.addEventListener('change', (e) => {
             console.log(`Visibility changed for module ${message.id_module}: ${e.target.checked}`);
-            eventManager.emit('changeVisibleMarker', {
+            eventManager.emit(EventTypes.TABLE.CHECKBOX_MARKER, {
                 id: message.id_module,
                 flag: e.target.checked
             });
@@ -76,7 +76,7 @@ class TableManager {
         traceCheckbox.checked = false;
         traceCheckbox.addEventListener('change', (e) => {
             console.log(`Trace visibility changed for module ${message.id_module}: ${e.target.checked}`);
-            eventManager.emit('changeVisibleTrace', {
+            eventManager.emit(EventTypes.TABLE.CHECKBOX_TRACE, {
                 id: message.id_module,
                 flag: e.target.checked
             });

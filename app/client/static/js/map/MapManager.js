@@ -26,10 +26,10 @@ class MapManager {
         this.paths = new Map();
 
 
-        eventManager.on('changeVisibleMarker', data => {
+        eventManager.on(EventTypes.TABLE.CHECKBOX_MARKER, data => {
             this.setMarkerVisible(data.id, data.flag);
         });
-        eventManager.on('changeVisibleTrace', (data) => {
+        eventManager.on(EventTypes.TABLE.CHECKBOX_TRACE, (data) => {
             this.setTraceVisible(data.id, data.flag);
         });
     }

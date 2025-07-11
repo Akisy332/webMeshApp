@@ -15,6 +15,10 @@ db_executor = SQLiteExecutor(DATABASE_PATH)
 from app.models.database import init_tables
 init_tables()
 
+from app.core.socketio import init_socketio
+# Инициализация Socket.IO
+init_socketio(app)
+
 ##### Клиентские blueprints #####
 
 ########### client ###############

@@ -77,10 +77,22 @@
 <!--  -->
 {% block scripts %}
 
+<!-- подключение скрипта со всеми возможными Events -->
+<script
+    type="text/javascript"
+    src="{{ url_for('client.static', filename='js/service/events.js') }}"
+></script>
+
 <!-- подключение скрипта для управления своими Events -->
 <script
     type="text/javascript"
-    src="{{ url_for('client.static', filename='js/EventManager.js') }}"
+    src="{{ url_for('client.static', filename='js/service/event-service.js') }}"
+></script>
+
+<!-- подключение скрипта для управления сокетом через Events -->
+<script
+    type="text/javascript"
+    src="{{ url_for('client.static', filename='js/service/socket-service.js') }}"
 ></script>
 
 <!-- подключение скрипта карты leaflet -->

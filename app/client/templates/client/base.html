@@ -69,6 +69,13 @@
             type="text/javascript"
             src="{{ url_for('client.static',filename='js/lib/bootstrap/bootstrap.min.js') }}"
         ></script>
+
+        <!-- Подключение скриптов SocketIO -->
+        <script 
+            type="text/javascript"
+            src="https://cdn.socket.io/4.7.2/socket.io.min.js"
+        ></script>
+
         {#
         {% comment %} <!-- Подключение скриптов MDB -->
         <script
