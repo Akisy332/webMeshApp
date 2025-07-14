@@ -195,3 +195,6 @@ cython_debug/
 
 # Test Folder
 test/
+
+device_uuid.txt
+secret.txt
