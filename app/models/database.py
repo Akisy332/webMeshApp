@@ -228,23 +228,51 @@ class DatabaseManager:
             return self.db.lastrowid
 
     def _ensure_module_exists(self, module_id: int, 
-                            default_name: Optional[str] = None, 
-                            default_color: str = "#ff0000"):
+                        default_name: Optional[str] = None, 
+                        default_color: Optional[str] = None):
         """
-        Проверяем существование модуля и создаем при необходимости
+        Проверяем существование модуля и создаем при необходимости.
+        Если цвет не указан, генерируется уникальный контрастный цвет на основе ID модуля.
         """
         exists = self.db.execute(
             "SELECT 1 FROM module WHERE id = ?",
             params=(module_id,),
             fetch=True
         )
-        
+
         if not exists:
-            name = default_name or format(module_id, 'X')
+            name = default_name or f"Module {module_id}"
+            color = default_color or self._generate_contrasting_color(module_id)
             self.db.execute(
                 "INSERT INTO module (id, name, color) VALUES (?, ?, ?)",
-                params=(module_id, name, default_color)
+                params=(module_id, name, color)
             )
+
+    def _generate_contrasting_color(self, module_id: int) -> str:
+        """
+        Генерирует уникальный контрастный цвет на основе ID модуля.
+        Использует HSV цветовое пространство для равномерного распределения цветов.
+        """
+        # Используем золотое сечение для равномерного распределения оттенков
+        golden_ratio = 0.618033988749895
+        hue = (module_id * golden_ratio) % 1.0  # Получаем значение от 0 до 1
+
+        # Фиксированные значения насыщенности и яркости для контрастных цветов
+        saturation = 0.8
+        value = 0.95
+
+        # Конвертируем HSV в RGB
+        import colorsys
+        r, g, b = colorsys.hsv_to_rgb(hue, saturation, value)
+
+        # Конвертируем RGB в HEX
+        hex_color = "#{:02x}{:02x}{:02x}".format(
+            int(r * 255),
+            int(g * 255),
+            int(b * 255)
+        )
+
+        return hex_color
 
     # Оптимизированные методы для массовых операций
     def batch_insert_data(self, data_list: List[Tuple]):
