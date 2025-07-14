@@ -31,5 +31,9 @@ function windowIndexReadyFunc() {
     });
 }
 
+// Обработчик кнопки - отправляем запрос на сервер
+document.getElementById('random-marker').addEventListener('click', function () {
+    eventBus.emit(EventTypes.APP.RANDOM_POINT);
+});
 
 window.onload = windowIndexReadyFunc;

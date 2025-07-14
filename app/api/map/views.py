@@ -25,11 +25,5 @@ def get_trace_module():
     
     db_manager = DatabaseManager()
     data = db_manager.get_module_coordinates(int(id_module, 16), id_session, id_message_type)
-    
-    large_data = {
-        "message": f"Данные о треке модуля {id_module}",
-        "id_module": id_module,
-        "coords": data
-    }
-    
-    return jsonify(large_data)
+   
+    return jsonify(data)

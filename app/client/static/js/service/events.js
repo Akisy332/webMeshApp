@@ -3,11 +3,12 @@ window.EventTypes = {
     SOCKET: {
         // CONNECT: 'socketConnect',
         // DISCONNECT: 'socketDisconnect',
-        // MAP_UPDATE: 'mapUpdate'
+        NEW_DATA_MODULE: 'moduleUpdate'
     },
     APP: {
         // INIT: 'appInit',
         // READY: 'appReady'
+        RANDOM_POINT: 'addRandomPoint'
     },
     TABLE: {
         CHECKBOX_MARKER: 'changeVisibleMarker',

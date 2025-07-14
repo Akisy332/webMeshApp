@@ -7,16 +7,20 @@ class SocketService {
 
     // Пересылка событий между Socket.IO и EventBus
     setupEventForwarding() {
+        // Клиент -> Сервер
+        eventBus.on(EventTypes.APP.RANDOM_POINT, (data) => {
+            this.socket.emit(EventTypes.APP.RANDOM_POINT,);
+        });
+
         // Сервер -> Клиент
-        // this.socket.on('serverEvent', (data) => {
-        //     eventBus.emit('serverEvent', data);
-        // });
+        this.socket.on(EventTypes.SOCKET.NEW_DATA_MODULE, (data) => {
+            console.log("update", data)
+            eventBus.emit(EventTypes.SOCKET.NEW_DATA_MODULE, data);
+        });
 
-        // // Клиент -> Сервер
-        // eventBus.on('clientEvent', (data) => {
-        //     this.socket.emit('clientEvent', data);
-        // });
-
+        this.socket.on('error', (data) => {
+            console.log('Error', data)
+        });
 
         // Слушатели событий
         this.socket.on('connect', () => {

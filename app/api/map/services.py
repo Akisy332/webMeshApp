@@ -30,20 +30,6 @@ import random
 
 
 
-# @socketio.on('connect')
-# def handle_connect():
-#     print('Client connected:', request.sid)
-#     io_server.clients.add(request.sid)
-    
-#     # Отправляем текущее состояние
-#     initial_data = {
-#         'view': io_server.current_view,
-#         'markers': list(io_server.markers.values()),
-#         'paths': list(io_server.paths.values()),
-#         'random_marker_path': io_server.random_marker_path,
-#         'table_data': io_server.table_data
-#     }
-#     emit('map_init', initial_data)
 
 # @socketio.on('disconnect')
 # def handle_disconnect():

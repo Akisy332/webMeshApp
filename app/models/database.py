@@ -1,8 +1,9 @@
 from datetime import datetime
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Union
 from contextlib import contextmanager
 import logging
 from app import db_executor
+import random
 
 def init_tables():
         """Инициализация таблиц при первом запуске"""
@@ -145,7 +146,6 @@ class DatabaseManager:
             )
             return self.db.lastrowid
 
-
     def _ensure_module_exists(self, module_id: int, 
                             default_name: Optional[str] = None, 
                             default_color: str = "#ff0000"):
@@ -227,16 +227,35 @@ class DatabaseManager:
         id_module: int,     
         id_session: int, 
         id_message_type: Optional[int] = None
-    ) -> List[Tuple[float, float]]:
+    ) -> Dict[str, Union[List[Tuple[float, float]], str]]:
         """
-        Возвращает список координат (lat, lon) модуля для указанной сессии
-        
+        Возвращает список координат (lat, lon) модуля для указанной сессии и цвет модуля
+
         :param id_module: ID модуля
         :param id_session: ID сессии
         :param id_message_type: Опциональный фильтр по типу сообщения
-        :return: Список кортежей с координатами (lat, lon)
+        :return: Словарь с координатами и цветом модуля:
+                 {
+                     'coordinates': список кортежей (lat, lon),
+                     'module_color': цвет модуля из таблицы modules,
+                     'module_name': название модуля
+                 }
                  Возвращает только записи с валидными координатами (gps_ok=1)
         """
+        # Сначала получаем цвет модуля из таблицы modules
+        module_info = self.db.execute(
+            "SELECT color, name FROM module WHERE id = ?",
+            params=(id_module,),
+            fetch=True
+        )
+
+        module_color = "#000000"  # значение по умолчанию
+        module_name = "Unknown"
+        if module_info:
+            module_color = module_info[0].get('color', "#000000")
+            module_name = module_info[0].get('name', "Unknown")
+
+        # Затем получаем координаты
         query = """
             SELECT lat, lon
             FROM data
@@ -252,11 +271,19 @@ class DatabaseManager:
         if id_message_type is not None:
             query += " AND id_message_type = ?"
             params.append(id_message_type)
-            
+
         query += " ORDER BY datetime ASC"
 
         result = self.db.execute(query, params=tuple(params), fetch=True)
-        return [(row['lat'], row['lon']) for row in result]
+        coordinates = [(row['lat'], row['lon']) for row in result]
+
+        return {
+            'message': f"Данные о треке модуля {id_module}",
+            'coords': coordinates,
+            'module_color': module_color,
+            'id_module': format(id_module, 'X'),
+            'module_name': module_name
+        }
     
     def get_last_message(self, session_id: int) -> List[Dict[str, Any]]:
         """
@@ -325,7 +352,7 @@ class DatabaseManager:
                 'id_message_type': row['id_message_type'],
                 'message_type': row['message_type'],
                 'datetime': row['datetime'],
-                'coordinates': {
+                'coords': {
                     'lat': lat,
                     'lon': lon,
                     'alt': alt if alt is not None else 0.0  # Можно установить значение по умолчанию для alt
@@ -372,3 +399,106 @@ class DatabaseManager:
             params=(session_id,),
             fetch=True
         )
+
+    def add_random_ffff_module_data(self):
+        """
+        Добавляет запись для модуля FFFF (65535) в последнюю сессию со случайными координатами
+        и возвращает добавленные данные в виде словаря с цветом модуля и описанием.
+        """
+        try:
+            # Получаем ID последней сессии
+            last_session = self.db.execute(
+                "SELECT id FROM sessions ORDER BY id DESC LIMIT 1",
+                fetch=True
+            )
+
+            if not last_session:
+                raise ValueError("Нет доступных сессий")
+
+            session_id = last_session[0]['id']
+
+            # Проверяем/создаем модуль FFFF
+            module_id = 0xFFFF  # 65535 в десятичной
+            module_name = "FFFF"
+            module_color = "#00ff00"
+            self._ensure_module_exists(module_id, module_name, module_color)
+
+            # Генерируем случайные координаты в пределах Томска
+            lat = 56.47 + random.uniform(-0.1, 0.1)  # ~55.65-55.85
+            lon = 84.97 + random.uniform(-0.1, 0.1)   # ~37.5-37.7
+            alt = random.uniform(100, 200)           # Высота 100-200 метров
+            datetime_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            message_number = random.randint(1, 1000)
+
+            # Вставляем запись
+            self.db.execute(
+                """
+                INSERT INTO data 
+                (id_module, id_session, id_message_type, datetime, 
+                 lat, lon, alt, gps_ok, message_number)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                params=(
+                    module_id, session_id, 1, datetime_now,
+                    lat, lon, alt, 1, message_number
+                )
+            )
+
+            # Получаем только что добавленную запись
+            added_data = self.db.execute(
+                """
+                SELECT * FROM data 
+                WHERE id_module = ? AND id_session = ? AND message_number = ?
+                ORDER BY id DESC LIMIT 1
+                """,
+                params=(module_id, session_id, message_number),
+                fetch=True
+            )
+
+            if not added_data:
+                raise ValueError("Не удалось получить добавленные данные")
+
+            # Получаем информацию о модуле из базы
+            module_info = self.db.execute(
+                "SELECT name, color FROM module WHERE id = ?",
+                params=(module_id,),
+                fetch=True
+            )
+
+            if module_info:
+                module_name = module_info[0].get('name', "FFFF")
+                module_color = module_info[0].get('color', "#00ff00")
+
+            # Формируем словарь с результатами
+            result = {
+                'id': added_data[0]['id'],
+                'id_module': format(added_data[0]['id_module'], 'X'),
+                'module_name': module_name,
+                'module_color': module_color,
+
+                'session_id': added_data[0]['id_session'],
+                'message_type': added_data[0]['id_message_type'],
+                'datetime': added_data[0]['datetime'],
+                'coords': {
+                    'lat': added_data[0]['lat'],
+                    'lon': added_data[0]['lon'],
+                    'alt': added_data[0]['alt']
+                },
+                'gps_ok':bool(added_data[0]['gps_ok']),
+                'message_number': added_data[0]['message_number'],
+                'status': "success",
+                'message': "Данные модуля успешно добавлены"
+            }
+
+            from app.api.websockets.services import send_new_module_data
+            send_new_module_data(result)
+
+            return result
+        except Exception as e:
+            error_message = f"Ошибка при добавлении тестовых данных FFFF: {e}"
+            logging.error(error_message)
+            return {
+                'status': "error",
+                'message': error_message,
+                'module_id': 0xFFFF
+            }

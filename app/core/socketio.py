@@ -15,7 +15,7 @@ def init_socketio(app):
 
 def register_handlers():
     """Динамическая регистрация обработчиков"""
-    from app.api.websockets import map, table  # Импорт после инициализации
+    from app.api.websockets import map, table, services  # Импорт после инициализации
     
     # Альтернативно: автоматический поиск обработчиков
     # через сканирование директории api/websockets/

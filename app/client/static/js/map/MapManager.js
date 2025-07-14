@@ -26,11 +26,19 @@ class MapManager {
         this.paths = new Map();
 
 
-        eventManager.on(EventTypes.TABLE.CHECKBOX_MARKER, data => {
-            this.setMarkerVisible(data.id, data.flag);
+        eventBus.on(EventTypes.TABLE.CHECKBOX_MARKER, data => {
+            this.setMarkerVisible(data.id_module, data.flag);
         });
-        eventManager.on(EventTypes.TABLE.CHECKBOX_TRACE, (data) => {
-            this.setTraceVisible(data.id, data.flag);
+        eventBus.on(EventTypes.TABLE.CHECKBOX_TRACE, (data) => {
+            this.setTraceVisible(data.id_module, data.flag);
+        });
+        eventBus.on(EventTypes.SOCKET.NEW_DATA_MODULE, (data) => {
+            if (!data || !data.coords || !data.coords.lat || !data.coords.lon) return
+            let path = this.paths.get(data.id_module);
+            if (path) {
+                this.updateTrace(data);
+            }
+            this.addOrUpdateMarker(data);
         });
     }
     
@@ -42,7 +50,7 @@ class MapManager {
         if (!data || !data.id_module) return;
         
         let marker = this.markers.get(data.id_module);
-        const latlng = [data.coordinates.lat, data.coordinates.lon];
+        const latlng = [data.coords.lat, data.coords.lon];
         
         if (marker) {
             marker.setLatLng(latlng);
@@ -74,7 +82,7 @@ class MapManager {
         let path = this.paths.get(id_module);
         if (!path) {
             const response = await this.getTraceModule(id_module, 1, 1)
-            this.addOrUpdateTrace(response)
+            this.addTrace(response)
         } else if (flag && !this.map.hasLayer(path)) {
             path.addTo(this.map);
         } else if (!flag && this.map.hasLayer(path)) {
@@ -95,8 +103,30 @@ class MapManager {
         });
     }
 
-    addOrUpdateTrace(data) {
-        console.log(data)
+    addTrace(data) {
+        if (!data || !data.id_module || !data.coords) return;
+        // Получаем текущий путь
+        let path = this.paths.get(data.id_module);
+
+        // Если coords - массив массивов (множество точек)
+        const coords = Array.isArray(data.coords[0]) && 
+                      (typeof data.coords[0][0] === 'number' || Array.isArray(data.coords[0][0])) 
+                      ? data.coords 
+                      : [data.coords];
+
+        if (!path) {             
+            console.log("Create Trace for marker ", data.id_module)
+            // Создаем новый путь со всеми координатами
+            path = L.polyline(coords, {
+                color: data.module_color || '#FF0000',
+                weight: data.width || 2
+            }).addTo(this.map);
+
+            this.paths.set(data.id_module, path);
+        }
+    }
+
+    updateTrace(data) {
         if (!data || !data.id_module || !data.coords) return;
         
         // Получаем текущий путь
@@ -115,18 +145,9 @@ class MapManager {
             path.setLatLngs(newCoords);
 
             path.setStyle({
-                color: data.color || '#FF0000',
+                color: data.module_color || '#FF0000',
                 weight: data.width || 2
             });
-        } else {
-            console.log("Create Trace for marker ", data.id_module)
-            // Создаем новый путь со всеми координатами
-            path = L.polyline(coords, {
-                color: data.color || '#FF0000',
-                weight: data.width || 2
-            }).addTo(this.map);
-
-            this.paths.set(data.id_module, path);
         }
     }
 
@@ -160,32 +181,6 @@ class MapManager {
     }
 }
 
-
-
-
-
-
-
-
-// // Обработчик кнопки - отправляем запрос на сервер
-// document.getElementById('random-marker').addEventListener('click', function() {
-//     if (socket && socket.connected) {
-//         // Генерируем уникальный идентификатор для маркера
-//         const source = 'random_marker_';
-        
-//         // Отправляем запрос на сервер с информацией о новом маркере
-//         socket.emit('add_random_point', {
-//             source: source,
-//             name: 'Случайный маркер ' + (Object.keys(tableData).length + 1),
-//             alt: Math.floor(Math.random() * 1000),
-//             time: Date.now() / 1000,
-//             visible: true,
-//             trace: true
-//         });
-//     } else {
-//         alert('Connection to server not established!');
-//     }
-// });
 
 
 // // Глобальные переменные для таблицы

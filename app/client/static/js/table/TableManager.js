@@ -4,18 +4,28 @@ class TableManager {
     constructor(tableId) {
         this.map_config = {};
         this.tableData = {}; // Глобальное хранилище данных
+        this.tableId = tableId
 
-        this.tbody = document.getElementById(tableId);
-
+        this.initTooltip = this.initTooltip.bind(this);
+        this.updateRowData = this.updateRowData.bind(this);
+        this.updateDotAndTooltip = this.updateDotAndTooltip.bind(this);
 
         this.startUpdatingTimes();
+
+        eventBus.on(EventTypes.SOCKET.NEW_DATA_MODULE, (data) => {
+            if (!data || !data.coords || !data.coords.lat || !data.coords.lon) return
+            this.updateTable(data)
+        });
     }
 
     updateTable(messages) {
+        // Приводим входные данные к массиву, если это не массив
+        const messagesArray = Array.isArray(messages) ? messages : [messages];
 
+        console.log("test", messagesArray);
 
         // Обновляем хранилище данных
-        messages.forEach(message => {
+        messagesArray.forEach(message => {
             this.tableData[message.id_module] = {
                 datetime: message.datetime,
                 gps_ok: message.gps_ok,
@@ -24,15 +34,15 @@ class TableManager {
                 module_color: message.module_color
             };
         });
-
+        const tbody = document.getElementById(this.tableId);
         // Создаем или обновляем строки
-        messages.forEach(message => {
-            let row = this.tbody.querySelector(`tr[data-module-id="${message.id_module}"]`);
+        messagesArray.forEach(message => {
+            let row = tbody.querySelector(`tr[data-module-id="${message.id_module}"]`);
 
             if (!row) {
                 row = this.createTableRow(message);
-                this.tbody.appendChild(row);
-                this.initTooltip(row.querySelector('.status-dot'));
+                tbody.appendChild(row);
+                // Убираем прямой вызов initTooltip, так как он уже вызывается в updateDotAndTooltip
             } else {
                 this.updateRowData(row, message);
             }
@@ -61,8 +71,8 @@ class TableManager {
         visibleCheckbox.checked = true;
         visibleCheckbox.addEventListener('change', (e) => {
             console.log(`Visibility changed for module ${message.id_module}: ${e.target.checked}`);
-            eventManager.emit(EventTypes.TABLE.CHECKBOX_MARKER, {
-                id: message.id_module,
+            eventBus.emit(EventTypes.TABLE.CHECKBOX_MARKER, {
+                id_module: message.id_module,
                 flag: e.target.checked
             });
         });
@@ -76,8 +86,8 @@ class TableManager {
         traceCheckbox.checked = false;
         traceCheckbox.addEventListener('change', (e) => {
             console.log(`Trace visibility changed for module ${message.id_module}: ${e.target.checked}`);
-            eventManager.emit(EventTypes.TABLE.CHECKBOX_TRACE, {
-                id: message.id_module,
+            eventBus.emit(EventTypes.TABLE.CHECKBOX_TRACE, {
+                id_module: message.id_module,
                 flag: e.target.checked
             });
         });
@@ -92,7 +102,7 @@ class TableManager {
 
         // Высота
         const altCell = document.createElement('td');
-        altCell.textContent = `${Math.round(message.coordinates.alt)} м`;
+        altCell.textContent = `${Math.round(message.coords.alt)} м`;
         row.appendChild(altCell);
         console.log(message)
 
@@ -113,6 +123,13 @@ class TableManager {
 
         // Первоначальное обновление статуса
         this.updateDotAndTooltip(statusDot, message.gps_ok, message.datetime);
+
+        // Отложенная инициализация tooltip (если нужно)
+        setTimeout(() => {
+            if (!bootstrap.Tooltip.getInstance(statusDot)) {
+                this.initTooltip(statusDot);
+            }
+        }, 50);
 
         return row;
     }
@@ -155,19 +172,24 @@ class TableManager {
     }
 
     initTooltip(element) {
-        if (element && !element._tooltip) {
-            new bootstrap.Tooltip(element, {
+        if (!element || element._tooltip) return;
+
+        try {
+            element._tooltip = new bootstrap.Tooltip(element, {
                 trigger: 'hover focus',
-                title: element.dataset.bsTitle
+                title: element.getAttribute('data-bs-original-title') || ''
             });
+        } catch (e) {
+            console.error('Tooltip initialization error:', e);
         }
     }
 
     updateRowData(row, message) {
+        console.log("test2", message)
         this.tableData[message.id_module] = {
             datetime: message.datetime,
             gps_ok: message.gps_ok,
-            alt: message.alt,
+            alt: message.coords.alt,
             module_name: message.module_name,
             module_color: message.module_color
         };
@@ -182,7 +204,7 @@ class TableManager {
 
         const altCell = row.querySelector('td:nth-child(5)');
         if (altCell) {
-            altCell.textContent = `${Math.round(message.alt)} м`;
+            altCell.textContent = `${Math.round(message.coords.alt)} м`;
         }
 
         const timeCell = row.querySelector('td:nth-child(6)');
@@ -199,15 +221,33 @@ class TableManager {
     }
 
     updateDotAndTooltip(dot, gpsOk, datetime) {
+        if (!dot) return;
+
         const tooltipText = this.getTooltipText(gpsOk, datetime);
         const color = this.getStatusColor(gpsOk, datetime);
 
         dot.style.backgroundColor = color;
-        dot.dataset.bsTitle = tooltipText;
+        dot.setAttribute('data-bs-original-title', tooltipText);
 
-        const tooltip = bootstrap.Tooltip.getInstance(dot);
-        if (tooltip) {
-            tooltip.setContent({ '.tooltip-inner': tooltipText });
+        try {
+            const tooltip = bootstrap.Tooltip.getInstance(dot);
+            if (tooltip) {
+                // Обновляем конфигурацию tooltip
+                tooltip._config.title = tooltipText;
+
+                // Проверяем, отображается ли tooltip в данный момент
+                const isShown = tooltip.tip && tooltip.tip.classList.contains('show');
+
+                if (isShown) {
+                    tooltip.hide();
+                    tooltip.show(); // Это обновит содержимое
+                }
+            } else {
+                // Если tooltip еще не инициализирован, инициализируем
+                this.initTooltip(dot);
+            }
+        } catch (e) {
+            console.error('Tooltip update error:', e);
         }
     }
 
