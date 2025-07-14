@@ -87,17 +87,40 @@ class DatabaseManager:
                 print("Error data: ", data_string)
                 raise ValueError("Недостаточно данных в строке")
             
-            message_type_code = parts[0]
-            if message_type_code == "GV":
-                message_type_code = 1
-            elif message_type_code == "GL":
-                message_type_code = 0 
-            else:
-               message_type_code = int(message_type_code)
-                  
-            module_id = int(parts[1], 16)
-            lat, lon, alt = parts[2:5]
-            message_number = int(parts[5])
+            
+            message_type_code = None
+            module_id = None
+            lat = None
+            lon = None
+            alt = None
+            message_number = None
+            
+                        
+            if len(parts) == 6 or len(parts) == 7:
+                message_type_code = parts[0]
+                if message_type_code == "GV":
+                    message_type_code = 1
+                elif message_type_code == "GL":
+                    message_type_code = 0 
+                else:
+                   message_type_code = int(message_type_code)
+
+                module_id = int(parts[1], 16)
+                lat, lon, alt = parts[2:5]
+                message_number = int(parts[5])
+                
+            elif len(parts) == 10:
+                message_type_code = parts[0]
+                if message_type_code == "GV":
+                    message_type_code = 1
+                elif message_type_code == "GL":
+                    message_type_code = 0 
+                else:
+                   message_type_code = int(message_type_code)
+
+                module_id = int(parts[1], 16)
+                lat, lon, alt = parts[2:5]
+                message_number = int(parts[9])
             
             # Получаем или создаем связанные сущности
             id_session = self._get_or_create_session(session_name)
