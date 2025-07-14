@@ -83,13 +83,21 @@ class DatabaseManager:
         """
         try:
             parts = data_string.split()
-            if len(parts) < 10:
+            if len(parts) < 6:
+                print("Error data: ", data_string)
                 raise ValueError("Недостаточно данных в строке")
             
-            message_type_code = int(parts[0])
+            message_type_code = parts[0]
+            if message_type_code == "GV":
+                message_type_code = 1
+            elif message_type_code == "GL":
+                message_type_code = 0 
+            else:
+               message_type_code = int(message_type_code)
+                  
             module_id = int(parts[1], 16)
             lat, lon, alt = parts[2:5]
-            message_number = int(parts[9])
+            message_number = int(parts[5])
             
             # Получаем или создаем связанные сущности
             id_session = self._get_or_create_session(session_name)
@@ -121,7 +129,57 @@ class DatabaseManager:
                 )
             )
             
-            return True
+            # Получаем только что добавленную запись
+            added_data = self.db.execute(
+                """
+                SELECT * FROM data 
+                WHERE id_module = ? AND id_session = ? AND message_number = ?
+                ORDER BY id DESC LIMIT 1
+                """,
+                params=(module_id, id_session, message_number),
+                fetch=True
+            )
+
+            if not added_data:
+                raise ValueError("Не удалось получить добавленные данные")
+
+            # Получаем информацию о модуле из базы
+            module_info = self.db.execute(
+                "SELECT name, color FROM module WHERE id = ?",
+                params=(module_id,),
+                fetch=True
+            )
+
+            if module_info:
+                module_name = module_info[0].get('name', "FFFF")
+                module_color = module_info[0].get('color', "#00ff00")
+
+            # Формируем словарь с результатами
+            result = {
+                'id': added_data[0]['id'],
+                'id_module': format(added_data[0]['id_module'], 'X'),
+                'module_name': module_name,
+                'module_color': module_color,
+
+                'session_id': added_data[0]['id_session'],
+                'message_type': added_data[0]['id_message_type'],
+                'datetime': added_data[0]['datetime'],
+                'coords': {
+                    'lat': added_data[0]['lat'],
+                    'lon': added_data[0]['lon'],
+                    'alt': added_data[0]['alt']
+                },
+                'gps_ok':bool(added_data[0]['gps_ok']),
+                'message_number': added_data[0]['message_number'],
+                'status': "success",
+                'message': "Данные модуля успешно добавлены"
+            }
+
+            from app.api.websockets.services import send_new_module_data
+            send_new_module_data(result)
+
+            return result
+            
         except Exception as e:
             logging.error(f"Ошибка при обработке данных: {e}")
             return False

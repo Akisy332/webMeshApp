@@ -34,11 +34,14 @@ class MapManager {
         });
         eventBus.on(EventTypes.SOCKET.NEW_DATA_MODULE, (data) => {
             if (!data || !data.coords || !data.coords.lat || !data.coords.lon) return
-            let path = this.paths.get(data.id_module);
-            if (path) {
-                this.updateTrace(data);
+            else {
+                console.log("test3: ", !data || !data.coords || !data.coords.lat || !data.coords.lon)
+                let path = this.paths.get(data.id_module);
+                if (path) {
+                    this.updateTrace(data);
+                }
+                this.addOrUpdateMarker(data);
             }
-            this.addOrUpdateMarker(data);
         });
     }
     
@@ -50,22 +53,24 @@ class MapManager {
         if (!data || !data.id_module) return;
         
         let marker = this.markers.get(data.id_module);
-        const latlng = [data.coords.lat, data.coords.lon];
-        
-        if (marker) {
-            marker.setLatLng(latlng);
-            marker.setPopupContent(data.module_name || data.id_module);
-            marker.setIcon(this.createCustomIcon(data.module_color || '#FF0000'));
-
-        } else {
-            console.log("Create marker", data.id_module)
-            marker = L.marker(latlng, {
-                icon: this.createCustomIcon(data.module_color || '#FF0000')
-            }).bindPopup(data.module_name || data.id_module);
-
-            marker.addTo(this.map);
+        if(data.coords.lat != null && data.coords.lon != null) {
+            const latlng = [data.coords.lat, data.coords.lon];
             
-            this.markers.set(data.id_module, marker);
+            if (marker) {
+                marker.setLatLng(latlng);
+                marker.setPopupContent(data.module_name || data.id_module);
+                marker.setIcon(this.createCustomIcon(data.module_color || '#FF0000'));
+            
+            } else {
+                console.log("Create marker", data.id_module)
+                marker = L.marker(latlng, {
+                    icon: this.createCustomIcon(data.module_color || '#FF0000')
+                }).bindPopup(data.module_name || data.id_module);
+            
+                marker.addTo(this.map);
+                
+                this.markers.set(data.id_module, marker);
+            }
         }
     }
 

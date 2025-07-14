@@ -19,6 +19,8 @@ from app.core.socketio import init_socketio
 # Инициализация Socket.IO
 init_socketio(app)
 
+
+
 ##### Клиентские blueprints #####
 
 ########### client ###############
@@ -70,3 +72,24 @@ app.register_blueprint(map)
 # app.register_blueprint(push)
 
 ############# api ################
+
+def handle_raw_data(data):
+    print(f"Received data from: {data}")
+
+def handle_error(message):
+    print(f"Error: {message}")
+
+def handle_status(message):
+    print(f"Status from: {message}")
+
+from app.models.serverHandler import TCPClientWorker
+worker = TCPClientWorker(
+    on_raw_data_received=handle_raw_data,
+    on_connection_error=handle_error,
+    on_status_message=handle_status
+)
+
+# Запуск в отдельном потоке
+import threading
+thread = threading.Thread(target=worker.run)
+thread.start()
