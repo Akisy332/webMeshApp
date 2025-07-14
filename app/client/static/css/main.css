@@ -1,4 +1,3 @@
-
 .status-dot {
     display: inline-block;
     width: 14px;
@@ -6,4 +5,42 @@
     border-radius: 50%;
     cursor: help;
     margin: 0 auto;
+}
+
+.modal {
+    z-index: 1060;
+    /* Выше чем z-index header (обычно 1050) */
+}
+
+/* Добавьте в ваш CSS файл */
+#sessionModal .modal-body {
+    padding: 0;
+}
+
+#sessionsList {
+    max-height: calc(70vh - 60px);
+    overflow-y: auto;
+}
+
+.list-group-item {
+    border-left: none;
+    border-right: none;
+    text-align: left;
+}
+
+.list-group-item:first-child {
+    border-top: none;
+}
+
+.list-group-item.active {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+#participantsList {
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    padding: 0.5rem;
 }
