@@ -52,12 +52,12 @@ app.register_blueprint(client)
 # app.register_blueprint(menu)
 
 # здесь будет api/order системы
-from app.api.database.views import database
+from app.api.http.database.views import database
 
 app.register_blueprint(database)
 
 # здесь будет api/storage системы
-from app.api.map.views import map
+from app.api.http.map.views import map
 
 app.register_blueprint(map)
 
@@ -92,4 +92,5 @@ worker = TCPClientWorker(
 # Запуск в отдельном потоке
 import threading
 thread = threading.Thread(target=worker.run)
+thread.daemon = True
 thread.start()

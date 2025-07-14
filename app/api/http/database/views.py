@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, jsonify, request, redirect, url_for, current_app
 from werkzeug.utils import secure_filename
-from app.api.database.services import allowed_file
+from app.api.http.database.services import allowed_file
 from app.models.database import DatabaseManager
 import os
 
