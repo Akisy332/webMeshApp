@@ -131,7 +131,7 @@ class TCPClientWorker:
                     # Теперь можно обработать сообщение
                     print(f"Получено: {full_message} (пакет #{packet_num})")
                     session_name = "test"
-                    if self.db_manager.parse_and_store_data(line, session_name):
+                    if self.db_manager.parse_and_store_data(line, 2, session_name):
                         print("Сохранено")
 
                 # Оставляем последнюю (возможно, неполную) строку в буфере

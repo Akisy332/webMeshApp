@@ -71,12 +71,13 @@ class DatabaseManager:
         """Включение поддержки внешних ключей"""
         self.db.execute("PRAGMA foreign_keys = ON")
 
-    def parse_and_store_data(self, data_string: str, session_name: str, 
+    def parse_and_store_data(self, data_string: str, session_id: int, session_name: str,
                            datetime_now: Optional[str] = None) -> bool:
         """
         Парсинг и сохранение данных в БД (оптимизированная версия)
         
         :param data_string: строка с данными для парсинга
+        :param session_id: id сессии
         :param session_name: имя сессии
         :param datetime_now: опциональное время записи
         :return: True при успешном сохранении
@@ -123,7 +124,7 @@ class DatabaseManager:
                 message_number = int(parts[9])
             
             # Получаем или создаем связанные сущности
-            id_session = self._get_or_create_session(session_name)
+            id_session = self._get_or_create_session(session_id, session_name)
             self._ensure_module_exists(module_id)
             
             # Обработка GPS данных
@@ -207,25 +208,45 @@ class DatabaseManager:
             logging.error(f"Ошибка при обработке данных: {e}")
             return False
 
-    def _get_or_create_session(self, session_name: str, 
-                             description: str = "") -> int:
+    def _get_session_by_id(self, session_id: int) -> dict | None:
         """
-        Получаем ID сессии или создаем новую (оптимизированная версия)
+        Получаем данные сессии по ID. Возвращает None если сессия не найдена.
         """
         result = self.db.execute(
-            "SELECT id FROM sessions WHERE name = ?",
-            params=(session_name,),
+            "SELECT * FROM sessions WHERE id = ?",
+            params=(session_id,),
             fetch=True
         )
-        if result:
-            return result[0]['id']
-        else:
-            datetime_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            self.db.execute(
-                "INSERT INTO sessions (name, description, datetime) VALUES (?, ?, ?)",
-                params=(session_name, description, datetime_str)
-            )
-            return self.db.lastrowid
+        return result[0] if result else None
+
+    def _create_session(self, session_name: str, description: str = "") -> int:
+        """
+        Создает новую сессию и возвращает её ID
+        """
+        datetime_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.db.execute(
+            "INSERT INTO sessions (name, description, datetime) VALUES (?, ?, ?)",
+            params=(session_name, description, datetime_str)
+        )
+        return self.db.lastrowid
+
+    def _get_or_create_session(self, id_session: int | None = None, 
+                             session_name: str = "", 
+                             description: str = "") -> int:
+        """
+        Получаем существующую сессию по ID или создаем новую.
+        Если передан id_session - ищет по нему, иначе создает новую сессию.
+        """
+        if id_session is not None:
+            session = self._get_session_by_id(id_session)
+            if session:
+                return session['id']
+
+        # Если id_session не передан или сессия не найдена - создаем новую
+        if not session_name:
+            session_name = "Автоматически созданая сессия"
+            description = "Вы можете либо удалить этот сеанс после создания нового, либо изменить его."
+        return self._create_session(session_name, description)
 
     def _ensure_module_exists(self, module_id: int, 
                         default_name: Optional[str] = None, 
@@ -299,7 +320,21 @@ class DatabaseManager:
         )
 
     def get_all_sessions(self) -> List[Dict[str, Any]]:
-        """Получение всех сессий"""
+        """Получение всех сессий.
+        Если список сессий пуст, автоматически создаёт базовую сессию.
+
+        Returns:
+            List[Dict[str, Any]]: Список сессий в формате [{"id": int, "name": str, ...}]
+        """
+        sessions = self.db.execute(
+            "SELECT id, name, description, datetime FROM sessions",
+            fetch=True
+        )
+
+        # Если сессий нет, создаём новую
+        if not sessions:
+            self._get_or_create_session()
+
         return self.db.execute(
             "SELECT id, name, description, datetime FROM sessions",
             fetch=True

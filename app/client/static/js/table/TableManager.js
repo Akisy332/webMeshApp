@@ -16,6 +16,24 @@ class TableManager {
             if (!data || !data.coords || !data.coords.lat || !data.coords.lon) return
             this.updateTable(data)
         });
+
+        // Подписка на событие очистки таблицы
+        eventBus.on(EventTypes.TABLE.CLEAR, this.clearTable);
+
+        // Подписка на событие загрузки новой сессии
+        eventBus.on(EventTypes.SESSION.LOAD, (sessionData) => {
+            this.clearTable();
+            this.updateTable(sessionData);
+        });
+    }
+
+    clearTable() {
+        const tbody = document.getElementById(this.tableId);
+        tbody.innerHTML = '';
+        this.tableData = {};
+        
+        // Отправляем событие о очистке таблицы
+        eventBus.emit(EventTypes.TABLE.CLEARED);
     }
 
     updateTable(messages) {
@@ -346,5 +364,3 @@ class TableManager {
         }, 1000);
     }
 }
-
-

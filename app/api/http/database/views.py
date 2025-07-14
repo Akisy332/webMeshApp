@@ -36,6 +36,7 @@ def upload_file():
         
         file = request.files['file']
         session_name = request.form.get('session_name', 'default_session')
+        session_id = 2
         
         if file.filename == '':
             return redirect(request.url)
@@ -56,7 +57,7 @@ def upload_file():
                     for line in lines:
                         line = line.strip()
                         if line:
-                            if db_manager.parse_and_store_data(line, session_name):
+                            if db_manager.parse_and_store_data(line, session_id, session_name):
                                 success_count += 1
                             else:
                                 error_count += 1

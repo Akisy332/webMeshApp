@@ -1,5 +1,6 @@
 // Объект с типами событий
 window.EventTypes = {
+    ERROR: 'error',
     SOCKET: {
         // CONNECT: 'socketConnect',
         // DISCONNECT: 'socketDisconnect',
@@ -12,11 +13,15 @@ window.EventTypes = {
     },
     TABLE: {
         CHECKBOX_MARKER: 'changeVisibleMarker',
-        CHECKBOX_TRACE: 'changeVisibleTrace'
+        CHECKBOX_TRACE: 'changeVisibleTrace',
+        CLEAR: 'clearTable'
         // ROW_SELECTED: 'tableRowSelected',
         // ROW_UPDATED: 'tableRowUpdated'
     },
     MAP: {
 
+    },
+    SESSION: {
+        LOAD: 'loadSession'
     }
 };

@@ -29,6 +29,8 @@ function windowIndexReadyFunc() {
     essenceCartBtn.addEventListener("click", function () {
         window.location.href = "/database";
     });
+
+    initSessionList()
 }
 
 // Обработчик кнопки - отправляем запрос на сервер
@@ -204,5 +206,7 @@ function loadSessions() {
         sessionsList.appendChild(sessionElement);
     });
 }
+
+
 
 window.onload = windowIndexReadyFunc;
