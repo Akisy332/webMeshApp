@@ -22,6 +22,9 @@ window.EventTypes = {
 
     },
     SESSION: {
-        LOAD: 'loadSession'
+        LIST_LOADED: 'session_list_loaded',
+        LOAD_DATA: 'session_load_data',
+        SELECTED: 'session_selected',
+        UPDATED: 'session_updated',
     }
 };

@@ -5,7 +5,7 @@ class MapManager {
 
         const map_config = {
             lat: 56.4520,
-            lon:  84.9615,
+            lon: 84.9615,
             zoom: 13
         };
 
@@ -43,32 +43,62 @@ class MapManager {
                 this.addOrUpdateMarker(data);
             }
         });
+
+        // Подписка на событие загрузки новой сессии
+        eventBus.on(EventTypes.SESSION.LOAD_DATA, (sessionData) => {
+            this.clearMap();
+            console.log("data ", sessionData)
+            sessionData.forEach((data) => {
+                this.addOrUpdateMarker(data);
+            });
+
+        });
     }
-    
-    setPosition(data){
+
+    clearMap() {
+        // Clear all markers
+        this.markers.forEach((marker, id_module) => {
+            this.map.removeLayer(marker);
+        });
+        this.markers.clear();
+
+        // Clear all paths
+        this.paths.forEach((path, id_module) => {
+            this.map.removeLayer(path);
+        });
+        this.paths.clear();
+        console.info("Map: ", "Cleared")
+        // // Clear all additional layers
+        // Object.keys(this.layers).forEach(layerName => {
+        //     this.map.removeLayer(this.layers[layerName]);
+        // });
+        // this.layers = {};
+    }
+
+    setPosition(data) {
         this.map.setView([data.lat, data.lon], data.zoom)
     }
 
     addOrUpdateMarker(data) {
         if (!data || !data.id_module) return;
-        
+
         let marker = this.markers.get(data.id_module);
-        if(data.coords.lat != null && data.coords.lon != null) {
+        if (data.coords.lat != null && data.coords.lon != null) {
             const latlng = [data.coords.lat, data.coords.lon];
-            
+
             if (marker) {
                 marker.setLatLng(latlng);
                 marker.setPopupContent(data.module_name || data.id_module);
                 marker.setIcon(this.createCustomIcon(data.module_color || '#FF0000'));
-            
+
             } else {
                 console.log("Create marker", data.id_module)
                 marker = L.marker(latlng, {
                     icon: this.createCustomIcon(data.module_color || '#FF0000')
                 }).bindPopup(data.module_name || data.id_module);
-            
+
                 marker.addTo(this.map);
-                
+
                 this.markers.set(data.id_module, marker);
             }
         }
@@ -114,12 +144,12 @@ class MapManager {
         let path = this.paths.get(data.id_module);
 
         // Если coords - массив массивов (множество точек)
-        const coords = Array.isArray(data.coords[0]) && 
-                      (typeof data.coords[0][0] === 'number' || Array.isArray(data.coords[0][0])) 
-                      ? data.coords 
-                      : [data.coords];
+        const coords = Array.isArray(data.coords[0]) &&
+            (typeof data.coords[0][0] === 'number' || Array.isArray(data.coords[0][0]))
+            ? data.coords
+            : [data.coords];
 
-        if (!path) {             
+        if (!path) {
             console.log("Create Trace for marker ", data.id_module)
             // Создаем новый путь со всеми координатами
             path = L.polyline(coords, {
@@ -133,16 +163,16 @@ class MapManager {
 
     updateTrace(data) {
         if (!data || !data.id_module || !data.coords) return;
-        
+
         // Получаем текущий путь
         let path = this.paths.get(data.id_module);
-        
+
         // Если coords - массив массивов (множество точек)
-        const coords = Array.isArray(data.coords[0]) && 
-                      (typeof data.coords[0][0] === 'number' || Array.isArray(data.coords[0][0])) 
-                      ? data.coords 
-                      : [data.coords];
-        
+        const coords = Array.isArray(data.coords[0]) &&
+            (typeof data.coords[0][0] === 'number' || Array.isArray(data.coords[0][0]))
+            ? data.coords
+            : [data.coords];
+
         if (path) {
             // Если путь существует, обновляем его координаты
             const currentCoords = path.getLatLngs();
@@ -185,135 +215,3 @@ class MapManager {
         }
     }
 }
-
-
-
-// // Глобальные переменные для таблицы
-// let tableData = {};
-// let tableUpdateInterval;
-
-// // Обработчик изменения чекбокса видимости маркера
-// function handleVisibilityChange(source, isVisible) {
-//     // Обновляем видимость маркера
-//     const marker = markers.get(source);
-//     if (marker) {
-//         if (isVisible) {
-//             marker.addTo(map);
-//         } else {
-//             map.removeLayer(marker);
-//         }
-//     }
-    
-//     // Получаем данные о пути (если есть)
-//     const path = paths.get(source + '_path');
-    
-//     // Если есть связанный путь и второй чекбокс активен
-//     const rowData = tableData[source];
-//     if (path && rowData && rowData.trace) {
-//         if (isVisible) {
-//             path.addTo(map);
-//         } else {
-//             map.removeLayer(path);
-//         }
-//     }
-    
-//     // Отправляем изменения на сервер
-//     if (socket && socket.connected) {
-//         socket.emit('update_table_row', {
-//             source: source,
-//             changes: { 
-//                 visible: isVisible,
-//                 // Не меняем trace, так как это отдельный чекбокс
-//             }
-//         });
-//     }
-// }
-
-// // Обработчик изменения чекбокса видимости пути
-// function handleTraceChange(source, isTraceVisible) {
-//     const rowData = tableData[source];
-//     if (!rowData) return;
-    
-//     // Получаем маркер и путь
-//     const marker = markers.get(source);
-//     const path = paths.get(source + '_path');
-    
-//     // Видимость пути зависит от видимости маркера И состояния чекбокса
-//     if (path) {
-//         if (isTraceVisible && rowData.visible && marker) {
-//             path.addTo(map);
-//         } else {
-//             map.removeLayer(path);
-//         }
-//     }
-    
-//     // Отправляем изменения на сервер
-//     if (socket && socket.connected) {
-//         socket.emit('update_table_row', {
-//             source: source,
-//             changes: { trace: isTraceVisible }
-//         });
-//     }
-// }
-
-// // Обработчик кнопки добавления строки
-// document.getElementById('add-row').addEventListener('click', function() {
-//     const source = 'row_' + Date.now();
-//     socket.emit('add_table_row', {
-//         source: source,
-//         name: 'Новый объект ' + (Object.keys(tableData).length + 1),
-//         alt: Math.floor(Math.random() * 1000),
-//         time: Date.now() / 1000
-//     });
-// });
-
-
-
-
-// let socket = null;
-
-// // Инициализация Socket.IO
-// function connectSocketIO() {
-//     if (socket && socket.connected) {
-//         return;
-//     }
-
-//     console.log('Connecting Socket.IO...');
-//     socket = io();
-
-//     socket.on('connect', () => {
-//         console.log('Socket.IO connected');
-//         // Запускаем обновление времени каждую секунду
-//         tableUpdateInterval = setInterval(updateTableTimes, 1000);
-//     });
-
-//     socket.on('disconnect', (reason) => {
-//         console.log('Socket.IO disconnected:', reason);
-//         clearInterval(tableUpdateInterval);
-//     });
-
-//     socket.on('connect_error', (error) => {
-//         console.error('Socket.IO connection error:', error);
-//     });
-
-//     // Обработчики событий
-//     socket.on('map_init', (data) => {
-//         handleMapInit(data);
-//         if (data.table_data) {
-//             updateTable(data.table_data);
-//         }
-//     });
-    
-    
-//     socket.on('path_update', addOrUpdatePath);
-//     socket.on('table_update', updateTable);
-//     // Обработчик события обновления маркера
-//     socket.on('marker_update', function(data) {
-//         addOrUpdateMarker(data);
-//     });
-// }  
-
-
-
-// // Инициализация Socket.IO
-// connectSocketIO();

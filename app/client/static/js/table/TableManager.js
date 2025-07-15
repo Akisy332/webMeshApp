@@ -21,7 +21,7 @@ class TableManager {
         eventBus.on(EventTypes.TABLE.CLEAR, this.clearTable);
 
         // Подписка на событие загрузки новой сессии
-        eventBus.on(EventTypes.SESSION.LOAD, (sessionData) => {
+        eventBus.on(EventTypes.SESSION.LOAD_DATA, (sessionData) => {
             this.clearTable();
             this.updateTable(sessionData);
         });
@@ -31,7 +31,7 @@ class TableManager {
         const tbody = document.getElementById(this.tableId);
         tbody.innerHTML = '';
         this.tableData = {};
-        
+
         // Отправляем событие о очистке таблицы
         eventBus.emit(EventTypes.TABLE.CLEARED);
     }

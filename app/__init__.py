@@ -57,9 +57,9 @@ from app.api.http.database.views import database
 app.register_blueprint(database)
 
 # здесь будет api/order системы
-from app.api.http.userTable.views import userTable
+from app.api.http.sessions.views import sessions
 
-app.register_blueprint(userTable)
+app.register_blueprint(sessions)
 
 # здесь будет api/storage системы
 from app.api.http.map.views import map

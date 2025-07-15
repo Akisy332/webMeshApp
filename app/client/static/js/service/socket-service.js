@@ -13,6 +13,20 @@ class SocketService {
         });
 
         // Сервер -> Клиент
+
+        // Подписка на события от сервера
+        this.socket.on('session_updated', (data) => {
+            // В зависимости от действия обновляем данные через EventBus
+            switch (data.action) {
+                case 'created':
+                case 'updated':
+                case 'deleted':
+                    // Просим систему обновить список сессий
+                    eventBus.emit(EventTypes.SESSION.UPDATED);
+                    break;
+            }
+        });
+
         this.socket.on(EventTypes.SOCKET.NEW_DATA_MODULE, (data) => {
             console.log("update", data)
             eventBus.emit(EventTypes.SOCKET.NEW_DATA_MODULE, data);

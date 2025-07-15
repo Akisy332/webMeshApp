@@ -18,9 +18,10 @@ def init_tables():
             """
             CREATE TABLE IF NOT EXISTS sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE,
+                name TEXT,
                 description TEXT,
-                datetime TEXT
+                datetime TEXT,
+                hidden INTEGER DEFAULT 0
             )
             """,
             """
@@ -56,6 +57,7 @@ def init_tables():
                 db_executor.execute(query[0], params=query[1])
             else:
                 db_executor.execute(query)
+        
 
 class DatabaseManager:
     def __init__(self):
@@ -66,12 +68,31 @@ class DatabaseManager:
         """
         self.db = db_executor
         self._enable_foreign_keys()
+        self.last_session = 0
+        self.get_all_sessions()
 
+    def hide_session(self, session_id: int) -> bool:
+        """
+        Помечает сессию как скрытую (hidden = 1)
+
+        :param session_id: ID сессии для скрытия
+        :return: True если операция успешна, False в случае ошибки
+        """
+        try:
+            self.db.execute(
+                "UPDATE sessions SET hidden = 1 WHERE id = ?",
+                params=(session_id,)
+            )
+            return True
+        except Exception as e:
+            logging.error(f"Ошибка при скрытии сессии {session_id}: {e}")
+            return False
+    
     def _enable_foreign_keys(self):
         """Включение поддержки внешних ключей"""
         self.db.execute("PRAGMA foreign_keys = ON")
 
-    def parse_and_store_data(self, data_string: str, session_id: int, session_name: str,
+    def parse_and_store_data(self, data_string: str, session_id: int, session_name: Optional[str] = "",
                            datetime_now: Optional[str] = None) -> bool:
         """
         Парсинг и сохранение данных в БД (оптимизированная версия)
@@ -213,17 +234,27 @@ class DatabaseManager:
         Получаем данные сессии по ID. Возвращает None если сессия не найдена.
         """
         result = self.db.execute(
-            "SELECT * FROM sessions WHERE id = ?",
+            "SELECT * FROM sessions WHERE id = ? AND hidden = 0",
             params=(session_id,),
             fetch=True
         )
         return result[0] if result else None
 
-    def _create_session(self, session_name: str, description: str = "") -> int:
+    def _create_session(
+        self, 
+        session_name: str, 
+        description: str = "", 
+        datetime_val: Optional[datetime] = None
+    ) -> int:
         """
         Создает новую сессию и возвращает её ID
+
+        Аргументы:
+            session_name: Название сессии
+            description: Описание сессии (по умолчанию пустая строка)
+            datetime_val: Дата и время сессии. Если None, используется текущее время
         """
-        datetime_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        datetime_str = (datetime_val if datetime_val is not None else datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
         self.db.execute(
             "INSERT INTO sessions (name, description, datetime) VALUES (?, ?, ?)",
             params=(session_name, description, datetime_str)
@@ -243,7 +274,7 @@ class DatabaseManager:
                 return session['id']
 
         # Если id_session не передан или сессия не найдена - создаем новую
-        if not session_name:
+        if session_name == "":
             session_name = "Автоматически созданая сессия"
             description = "Вы можете либо удалить этот сеанс после создания нового, либо изменить его."
         return self._create_session(session_name, description)
@@ -322,23 +353,29 @@ class DatabaseManager:
     def get_all_sessions(self) -> List[Dict[str, Any]]:
         """Получение всех сессий.
         Если список сессий пуст, автоматически создаёт базовую сессию.
+        Заполняет self.last_session ID последней сессии.
 
         Returns:
             List[Dict[str, Any]]: Список сессий в формате [{"id": int, "name": str, ...}]
         """
         sessions = self.db.execute(
-            "SELECT id, name, description, datetime FROM sessions",
+            "SELECT id, name, description, datetime FROM sessions WHERE hidden = 0 ORDER BY datetime DESC",
             fetch=True
         )
 
         # Если сессий нет, создаём новую
         if not sessions:
             self._get_or_create_session()
+            sessions = self.db.execute(
+                "SELECT id, name, description, datetime FROM sessions WHERE hidden = 0 ORDER BY datetime DESC",
+                fetch=True
+            )
 
-        return self.db.execute(
-            "SELECT id, name, description, datetime FROM sessions",
-            fetch=True
-        )
+        # Заполняем поле last_session ID последней сессии (с максимальным datetime)
+        if sessions:
+            self.last_session = sessions[0]['id']
+
+        return sessions
 
     def get_all_message_types(self) -> List[Dict[str, Any]]:
         """Получение всех типов сообщений"""
@@ -359,7 +396,7 @@ class DatabaseManager:
                    d.gps_ok, d.message_number
             FROM data d
             JOIN module m ON d.id_module = m.id
-            JOIN sessions s ON d.id_session = s.id
+            JOIN sessions s ON d.id_session = s.id AND s.hidden = 0
             JOIN message_type mt ON d.id_message_type = mt.id
             ORDER BY d.datetime DESC
             """,
@@ -513,13 +550,13 @@ class DatabaseManager:
         :param limit: ограничение количества записей
         """
         return self.db.execute(
-            """
+               """
             SELECT d.id, m.name as module_name, s.name as session_name, 
                    mt.type as message_type, d.datetime, d.lat, d.lon, d.alt, 
                    d.gps_ok, d.message_number
             FROM data d
             JOIN module m ON d.id_module = m.id
-            JOIN sessions s ON d.id_session = s.id
+            JOIN sessions s ON d.id_session = s.id AND s.hidden = 0
             JOIN message_type mt ON d.id_message_type = mt.id
             ORDER BY d.datetime DESC
             LIMIT ?
@@ -530,6 +567,16 @@ class DatabaseManager:
 
     def get_session_data(self, session_id: int) -> List[Dict[str, Any]]:
         """Получение данных по конкретной сессии"""
+        # First check if session is hidden
+        session = self.db.execute(
+            "SELECT hidden FROM sessions WHERE id = ?",
+            params=(session_id,),
+            fetch=True
+        )
+
+        if not session or session[0].get('hidden', 0) == 1:
+            return []
+
         return self.db.execute(
             """
             SELECT d.id, m.name as module_name, mt.type as message_type, 

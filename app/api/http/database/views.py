@@ -36,10 +36,13 @@ def upload_file():
         
         file = request.files['file']
         session_name = request.form.get('session_name', 'default_session')
-        session_id = 2
+        
+
+
         
         if file.filename == '':
             return redirect(request.url)
+        
         
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
@@ -47,7 +50,7 @@ def upload_file():
             file.save(filepath)
             
             db_manager = DatabaseManager()
-            
+            session_id = db_manager._create_session(session_name)
             try:
                 with open(filepath, 'r') as f:
                     lines = f.readlines()
