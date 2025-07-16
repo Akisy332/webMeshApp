@@ -122,7 +122,6 @@ class TableManager {
         const altCell = document.createElement('td');
         altCell.textContent = `${Math.round(message.coords.alt)} м`;
         row.appendChild(altCell);
-        console.log(message)
 
         // Время
         const timeCell = document.createElement('td');

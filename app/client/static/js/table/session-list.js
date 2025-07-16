@@ -20,35 +20,64 @@ function initSessionList() {
 
             if (sessions.length === 0) {
                 dataSelect.innerHTML = '<option selected disabled>Нет доступных сессий</option>';
-                // Отправляем пустой список через eventBus
                 eventBus.emit(EventTypes.SESSION.LIST_LOADED, { sessions: [], selectedSession: null });
                 return;
             }
 
-            // Сортируем сессии по datetime в порядке убывания (самые новые сначала)
+            // Сортируем сессии по datetime в порядке убывания
             sessions.sort((a, b) => new Date(b.datetime) - new Date(a.datetime));
 
-            dataSelect.innerHTML = '<option selected disabled>Выберите сессию</option>';
+            dataSelect.innerHTML = '';
+
+            // Добавляем placeholder option
+            const placeholderOption = new Option('Выберите сессию', '', true, true);
+            placeholderOption.disabled = true;
+            placeholderOption.hidden = true;
+            dataSelect.add(placeholderOption);
+
+            // Добавляем все сессии
             sessions.forEach(session => {
                 dataSelect.add(new Option(session.name, session.id));
             });
 
-            // Автоматически выбираем самую новую сессию (первую в отсортированном массиве)
-            if (sessions.length > 0) {
-                const newestSessionId = sessions[0].id;
-                dataSelect.value = newestSessionId;
-                currentSessionId = newestSessionId;
+            // Пытаемся получить сохраненный sessionId из localStorage
+            const savedSessionId = localStorage.getItem('selectedSessionId');
 
-                // Имитируем событие change для загрузки данных новой сессии
-                const event = new Event('change');
-                dataSelect.dispatchEvent(event);
+            // Ищем сессию для выбора (сначала сохраненную, потом первую в списке)
+            let sessionToSelect = null;
 
-                // Отправляем данные через eventBus
-                eventBus.emit(EventTypes.SESSION.LIST_LOADED, {
-                    sessions,
-                    selectedSession: sessions.find(s => s.id === newestSessionId)
-                });
+            if (savedSessionId) {
+                sessionToSelect = sessions.find(s => s.id == savedSessionId);
             }
+
+            if (!sessionToSelect && sessions.length > 0) {
+                sessionToSelect = sessions[0]; // Первая сессия как fallback
+            }
+
+            if (sessionToSelect) {
+                // Устанавливаем значение и сохраняем ID
+                dataSelect.value = sessionToSelect.id;
+                currentSessionId = sessionToSelect.id;
+
+                // Загружаем данные сессии
+                try {
+                    const response = await fetch(`/api/sessions/${sessionToSelect.id}/data`);
+                    if (!response.ok) throw new Error('Ошибка загрузки данных');
+
+                    const sessionData = await response.json();
+                    eventBus.emit(EventTypes.SESSION.LOAD_DATA, sessionData);
+                    eventBus.emit(EventTypes.SESSION.SELECTED, sessionToSelect);
+                } catch (error) {
+                    console.error('Ошибка загрузки данных сессии:', error);
+                    eventBus.emit(EventTypes.ERROR, 'Ошибка загрузки данных сессии');
+                }
+            }
+
+            // Отправляем событие о загрузке списка
+            eventBus.emit(EventTypes.SESSION.LIST_LOADED, {
+                sessions,
+                selectedSession: sessionToSelect || null
+            });
 
         } catch (error) {
             console.error('Ошибка:', error);
@@ -65,17 +94,15 @@ function initSessionList() {
         if (!sessionId) return;
 
         currentSessionId = sessionId;
+        localStorage.setItem('selectedSessionId', sessionId);
 
         try {
             const response = await fetch(`/api/sessions/${sessionId}/data`);
             if (!response.ok) throw new Error('Ошибка загрузки данных');
 
             const sessionData = await response.json();
-
-            // Отправляем данные через eventBus
             eventBus.emit(EventTypes.SESSION.LOAD_DATA, sessionData);
 
-            // Также отправляем информацию о выбранной сессии
             if (sessions) {
                 const selectedSession = sessions.find(s => s.id === sessionId);
                 if (selectedSession) {
