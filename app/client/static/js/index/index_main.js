@@ -29,7 +29,6 @@ function windowIndexReadyFunc() {
 
     initSessionList();
     initModalWindow();
-    console.log("Session: ", sessions)
 }
 
 // Обработчик кнопки - отправляем запрос на сервер

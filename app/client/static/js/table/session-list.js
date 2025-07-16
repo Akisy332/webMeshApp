@@ -103,12 +103,11 @@ function initSessionList() {
             const sessionData = await response.json();
             eventBus.emit(EventTypes.SESSION.LOAD_DATA, sessionData);
 
-            if (sessions) {
-                const selectedSession = sessions.find(s => s.id === sessionId);
-                if (selectedSession) {
-                    eventBus.emit(EventTypes.SESSION.SELECTED, selectedSession);
-                }
+            let selectedSession = sessions.find(s => s.id == sessionId);
+            if (!selectedSession) {
+                throw new Error('Выбранная сессия не найдена в списке');
             }
+            eventBus.emit(EventTypes.SESSION.SELECTED, selectedSession);
 
         } catch (error) {
             console.error('Ошибка:', error);

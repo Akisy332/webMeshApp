@@ -13,7 +13,7 @@ class TableManager {
         this.startUpdatingTimes();
 
         eventBus.on(EventTypes.SOCKET.NEW_DATA_MODULE, (data) => {
-            if (!data || !data.coords || !data.coords.lat || !data.coords.lon) return
+            // if (!data || !data.coords || !data.coords.lat || !data.coords.lon) return
             this.updateTable(data)
         });
 
@@ -202,7 +202,6 @@ class TableManager {
     }
 
     updateRowData(row, message) {
-        console.log("test2", message)
         this.tableData[message.id_module] = {
             datetime: message.datetime,
             gps_ok: message.gps_ok,
@@ -274,12 +273,12 @@ class TableManager {
         const diffSeconds = (now - msgTime) / 1000;
 
         if (gpsOk) {
-            if (diffSeconds < 10) return '#4CAF50';
-            if (diffSeconds < 60) return '#FFC107';
+            if (diffSeconds < 60) return '#4CAF50';
+            if (diffSeconds < 300) return '#FFC107';
             return '#F44336';
         } else {
-            if (diffSeconds < 10) return '#2196F3';
-            if (diffSeconds < 60) return '#FFC107';
+            if (diffSeconds < 60) return '#2196F3';
+            if (diffSeconds < 300) return '#FFC107';
             return '#F44336';
         }
     }
@@ -290,13 +289,13 @@ class TableManager {
         const diffSeconds = (now - msgTime) / 1000;
 
         if (gpsOk) {
-            if (diffSeconds < 10) return 'Статус: Активен\nДанные свежие (<10 сек)';
-            if (diffSeconds < 60) return 'Статус: Активен\nДанные устаревают (10-60 сек)';
-            return 'Статус: Активен\nДанные устарели (>60 сек)';
+            if (diffSeconds < 60) return 'Статус: Активен\nДанные свежие (<60 сек)';
+            if (diffSeconds < 3000) return 'Статус: Активен\nДанные устаревают (60-300 сек)';
+            return 'Статус: Активен\nДанные устарели (>300 сек)';
         } else {
-            if (diffSeconds < 10) return 'Статус: Ошибка GPS\nНедавно (<10 сек)';
-            if (diffSeconds < 60) return 'Статус: Ошибка GPS\n10-60 сек назад';
-            return 'Статус: Ошибка GPS\n>60 сек назад';
+            if (diffSeconds < 60) return 'Статус: Ошибка GPS\nНедавно (<60 сек)';
+            if (diffSeconds < 300) return 'Статус: Ошибка GPS\n60-300 сек назад';
+            return 'Статус: Ошибка GPS\n>300 сек назад';
         }
     }
 

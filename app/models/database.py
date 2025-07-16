@@ -92,13 +92,13 @@ class DatabaseManager:
         """Включение поддержки внешних ключей"""
         self.db.execute("PRAGMA foreign_keys = ON")
 
-    def parse_and_store_data(self, data_string: str, session_id: int, session_name: Optional[str] = "",
+    def parse_and_store_data(self, data_string: str, session_id: Optional[int] = None, session_name: Optional[str] = "",
                            datetime_now: Optional[str] = None) -> bool:
         """
         Парсинг и сохранение данных в БД (оптимизированная версия)
-        
+
         :param data_string: строка с данными для парсинга
-        :param session_id: id сессии
+        :param session_id: id сессии (None - использовать последнюю не скрытую сессию)
         :param session_name: имя сессии
         :param datetime_now: опциональное время записи
         :return: True при успешном сохранении
@@ -108,16 +108,16 @@ class DatabaseManager:
             if len(parts) < 6:
                 print("Error data: ", data_string)
                 raise ValueError("Недостаточно данных в строке")
-            
-            
+
+
             message_type_code = None
             module_id = None
             lat = None
             lon = None
             alt = None
             message_number = None
-            
-                        
+
+
             if len(parts) == 6 or len(parts) == 7:
                 message_type_code = parts[0]
                 if message_type_code == "GV":
@@ -130,7 +130,7 @@ class DatabaseManager:
                 module_id = int(parts[1], 16)
                 lat, lon, alt = parts[2:5]
                 message_number = int(parts[5])
-                
+
             elif len(parts) == 10:
                 message_type_code = parts[0]
                 if message_type_code == "GV":
@@ -143,11 +143,23 @@ class DatabaseManager:
                 module_id = int(parts[1], 16)
                 lat, lon, alt = parts[2:5]
                 message_number = int(parts[9])
-            
-            # Получаем или создаем связанные сущности
-            id_session = self._get_or_create_session(session_id, session_name)
+
+            # Если session_id не указан, получаем id последней не скрытой сессии
+            if session_id is None:
+                last_session = self.db.execute(
+                    "SELECT id FROM sessions WHERE hidden = 0 ORDER BY id DESC LIMIT 1",
+                    fetch=True
+                )
+                if last_session:
+                    id_session = last_session[0]['id']
+                else:
+                    # Если нет ни одной не скрытой сессии, создаем новую
+                    id_session = self._get_or_create_session(session_id, session_name)
+            else:
+                # Получаем или создаем связанные сущности
+                id_session = self._get_or_create_session(session_id, session_name)
             self._ensure_module_exists(module_id)
-            
+            print("added data session: ", id_session)
             # Обработка GPS данных
             gps_ok = 1
             try:
@@ -157,10 +169,10 @@ class DatabaseManager:
             except ValueError:
                 gps_ok = 0
                 lat_val = lon_val = alt_val = None
-            
+
             # Сохранение данных
             datetime_str = datetime_now or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
+
             self.db.execute(
                 """
                 INSERT INTO data 
@@ -173,7 +185,7 @@ class DatabaseManager:
                     lat_val, lon_val, alt_val, gps_ok, message_number
                 )
             )
-            
+
             # Получаем только что добавленную запись
             added_data = self.db.execute(
                 """
@@ -220,11 +232,8 @@ class DatabaseManager:
                 'message': "Данные модуля успешно добавлены"
             }
 
-            from app.api.websockets.services import send_new_module_data
-            send_new_module_data(result)
-
             return result
-            
+        
         except Exception as e:
             logging.error(f"Ошибка при обработке данных: {e}")
             return False
@@ -259,6 +268,7 @@ class DatabaseManager:
             "INSERT INTO sessions (name, description, datetime) VALUES (?, ?, ?)",
             params=(session_name, description, datetime_str)
         )
+        self.last_session = self.db.lastrowid
         return self.db.lastrowid
 
     def _get_or_create_session(self, id_session: int | None = None, 
@@ -271,6 +281,7 @@ class DatabaseManager:
         if id_session is not None:
             session = self._get_session_by_id(id_session)
             if session:
+                print("session: ", session['id'])
                 return session['id']
 
         # Если id_session не передан или сессия не найдена - создаем новую
@@ -407,7 +418,7 @@ class DatabaseManager:
         self, 
         id_module: int,     
         id_session: int, 
-        id_message_type: Optional[int] = None
+        id_message_type: Optional[int] = 0
     ) -> Dict[str, Union[List[Tuple[float, float]], str]]:
         """
         Возвращает список координат (lat, lon) модуля для указанной сессии и цвет модуля

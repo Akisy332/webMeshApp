@@ -11,6 +11,7 @@ function initModalWindow() {
 
     eventBus.on(EventTypes.SESSION.SELECTED, (session) => {
         currentSession = session;
+        updateSessionsListUI();
     });
 
     eventBus.on(EventTypes.SESSION.UPDATED, () => {
@@ -37,13 +38,15 @@ function initModalWindow() {
             if (currentSession && session.id === currentSession.id) {
                 sessionElement.classList.add('active');
             }
-
             sessionElement.innerHTML = `
-                <div class="d-flex w-100 justify-content-between">
-                    <h6 class="mb-1">${session.name}</h6>
-                    <small>${session.date}</small>
+                <div class="d-flex flex-column">
+                    <h6 class="mb-1 fw-medium text-dark">${session.name}</h6>
+                    <p class="session-description mb-2 text-secondary">${session.description || 'Нет описания'}</p>
+                    <small class="session-date text-muted">
+                        <i class="bi bi-calendar me-1"></i>${session.datetime.split(' ')[0]}
+                        <i class="bi bi-clock ms-2 me-1"></i>${session.datetime.split(' ')[1]}
+                    </small>
                 </div>
-                <p class="mb-1 text-muted small">${session.description || 'Нет описания'}</p>
             `;
 
             sessionElement.addEventListener('click', function () {
@@ -51,7 +54,7 @@ function initModalWindow() {
                 document.getElementById('editSessionId').value = session.id;
                 document.getElementById('editSessionName').value = session.name;
                 document.getElementById('editSessionDescription').value = session.description || '';
-                document.getElementById('editSessionDate').value = session.date;
+                document.getElementById('editSessionDate').value = session.datetime;
 
                 // Показываем форму редактирования
                 document.getElementById('emptyState').style.display = 'none';

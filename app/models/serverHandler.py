@@ -129,9 +129,11 @@ class TCPClientWorker:
                     full_message = " ".join(message_parts)
 
                     # Теперь можно обработать сообщение
-                    print(f"Получено: {full_message} (пакет #{packet_num}) ",self.db_manager.last_session)
-                    if self.db_manager.parse_and_store_data(line, self.db_manager.last_session):
+                    print(f"Получено: {full_message} (пакет #{packet_num}) ")
+                    data = self.db_manager.parse_and_store_data(line)
+                    if data:
                         print("Сохранено")
+                        send_new_module_data(data)
 
                 # Оставляем последнюю (возможно, неполную) строку в буфере
                 buffer = lines[-1]

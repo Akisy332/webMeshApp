@@ -1,33 +1,33 @@
 from datetime import datetime
 from typing import Dict, Any
 
-
-def parseDate(data: Dict[str, Any]) -> str:
+def parseDate(data: Dict[str, Any]) -> datetime:
     """
-    Конвертирует дату и добавляет время.
+    Конвертирует дату и добавляет текущее время.
     
     Параметры:
         data: Словарь, который может содержать ключ 'date' в формате:
               - строка "YYYY-MM-DD" (например, "2025-07-15")
-              - None (тогда используется текущая дата)
+              - None (тогда используется текущая дата и время)
     Возвращает:
-        время в формате datetime.
+        datetime объект с текущим временем (часы, минуты, секунды).
     """
-    # Получаем дату из data (если нет ключа 'date' или значение None - берем текущую дату)
     date_str = data.get("date")
     
     if date_str:
         try:
-            # Парсим строку в формате "YYYY-MM-DD"
+            # Парсим дату и добавляем текущее время
             session_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-            # Преобразуем в datetime (время 00:00:00)
-            datetime_val = datetime.combine(session_date, datetime.min.time())
+            now = datetime.now()
+            datetime_val = datetime.combine(session_date, now.time())
+            print(f"Дата из строки + текущее время: {datetime_val}")
         except ValueError:
-            # Если формат неверный, используем текущую дату
+            # Если формат неверный, используем текущую дату и время
             datetime_val = datetime.now()
+            print(f"Ошибка формата, используется текущее время: {datetime_val}")
     else:
-        # Если дата не передана, используем текущую
+        # Если дата не передана, используем текущую дату и время
         datetime_val = datetime.now()
+        print(f"Дата не указана, используется текущее время: {datetime_val}")
     
-    # Создаем сессию
     return datetime_val

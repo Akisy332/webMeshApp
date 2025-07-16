@@ -7,12 +7,24 @@
     margin: 0 auto;
 }
 
+
+
 .modal {
     z-index: 1060;
     /* Выше чем z-index header (обычно 1050) */
 }
 
-/* Добавьте в ваш CSS файл */
+/* CSS файл */
+#sessionModal .modal-content {
+    border-radius: 0.75rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+}
+
+#sessionModal .modal-header {
+    border-bottom: 1px solid #e9ecef;
+    padding: 1rem 1.5rem;
+}
+
 #sessionModal .modal-body {
     padding: 0;
 }
@@ -26,21 +38,110 @@
     border-left: none;
     border-right: none;
     text-align: left;
+    padding: 1rem 1.25rem;
+    transition: background-color 0.2s ease;
+    border-color: #f0f0f0;
 }
 
 .list-group-item:first-child {
     border-top: none;
 }
 
+.list-group-item:hover {
+    background-color: #f8f9fa;
+}
+
 .list-group-item.active {
-    background-color: #0d6efd;
-    border-color: #0d6efd;
+    background-color: #e0e7ff;
+    border-color: #e0e7ff;
+    border-left: 3px solid #4361ee;
+}
+
+.list-group-item.active h6 {
+    color: #4361ee;
+}
+
+.list-group-item.active .session-description,
+.list-group-item.active .session-date,
+.list-group-item.active .bi {
+    color: #4b5563 !important;
 }
 
 #participantsList {
     max-height: 150px;
     overflow-y: auto;
-    border: 1px solid #dee2e6;
-    border-radius: 0.25rem;
-    padding: 0.5rem;
+    border: 1px solid #e9ecef;
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    background-color: #f8f9fa;
+}
+
+.session-date {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-top: 0.5rem;
+}
+
+.session-description {
+    font-size: 0.9rem;
+    color: #495057;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.form-label {
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
+.form-control {
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e9ecef;
+}
+
+.form-control:focus {
+    border-color: #4361ee;
+    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.25);
+}
+
+.btn-primary {
+    background-color: #4361ee;
+    border-color: #4361ee;
+    border-radius: 0.5rem;
+    padding: 0.5rem 1.25rem;
+}
+
+.btn-primary:hover {
+    background-color: #3a56d4;
+    border-color: #3a56d4;
+}
+
+.btn-outline-secondary {
+    border-radius: 0.5rem;
+    padding: 0.5rem 1.25rem;
+}
+
+.empty-state-icon {
+    font-size: 3rem;
+    color: #adb5bd;
+    margin-bottom: 1rem;
+}
+
+.empty-state-text {
+    color: #6c757d;
+    font-size: 1.1rem;
+}
+
+/* Скрытие скроллбара для Chrome/Safari */
+#sessionModal .col-md-4.border-end::-webkit-scrollbar {
+    display: none;
+}
+
+/* Скрытие скроллбара для Firefox */
+#sessionModal .col-md-4.border-end {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }

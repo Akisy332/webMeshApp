@@ -25,6 +25,8 @@ class MapManager {
         this.markers = new Map();
         this.paths = new Map();
 
+        this.currentSession = null;
+
 
         eventBus.on(EventTypes.TABLE.CHECKBOX_MARKER, data => {
             this.setMarkerVisible(data.id_module, data.flag);
@@ -35,7 +37,6 @@ class MapManager {
         eventBus.on(EventTypes.SOCKET.NEW_DATA_MODULE, (data) => {
             if (!data || !data.coords || !data.coords.lat || !data.coords.lon) return
             else {
-                console.log("test3: ", !data || !data.coords || !data.coords.lat || !data.coords.lon)
                 let path = this.paths.get(data.id_module);
                 if (path) {
                     this.updateTrace(data);
@@ -47,11 +48,14 @@ class MapManager {
         // Подписка на событие загрузки новой сессии
         eventBus.on(EventTypes.SESSION.LOAD_DATA, (sessionData) => {
             this.clearMap();
-            console.log("data ", sessionData)
             sessionData.forEach((data) => {
                 this.addOrUpdateMarker(data);
             });
 
+        });
+
+        eventBus.on(EventTypes.SESSION.SELECTED, (session) => {
+            this.currentSession = session;
         });
     }
 
@@ -116,7 +120,7 @@ class MapManager {
     async setTraceVisible(id_module, flag) {
         let path = this.paths.get(id_module);
         if (!path) {
-            const response = await this.getTraceModule(id_module, 1, 1)
+            const response = await this.getTraceModule(id_module, this.currentSession.id, 0)
             this.addTrace(response)
         } else if (flag && !this.map.hasLayer(path)) {
             path.addTo(this.map);
