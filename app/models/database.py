@@ -37,6 +37,7 @@ def init_tables():
                 id_session INTEGER,
                 id_message_type INTEGER,
                 datetime TEXT,
+                datetime_unix INTEGER,
                 lat REAL,
                 lon REAL,
                 alt REAL,
@@ -93,151 +94,153 @@ class DatabaseManager:
         self.db.execute("PRAGMA foreign_keys = ON")
 
     def parse_and_store_data(self, data_string: str, session_id: Optional[int] = None, session_name: Optional[str] = "",
-                           datetime_now: Optional[str] = None) -> bool:
-        """
-        Парсинг и сохранение данных в БД (оптимизированная версия)
+                               datetime_now: Optional[str] = None) -> bool:
+            """
+            Парсинг и сохранение данных в БД (оптимизированная версия)
 
-        :param data_string: строка с данными для парсинга
-        :param session_id: id сессии (None - использовать последнюю не скрытую сессию)
-        :param session_name: имя сессии
-        :param datetime_now: опциональное время записи
-        :return: True при успешном сохранении
-        """
-        try:
-            parts = data_string.split()
-            if len(parts) < 6:
-                print("Error data: ", data_string)
-                raise ValueError("Недостаточно данных в строке")
+            :param data_string: строка с данными для парсинга
+            :param session_id: id сессии (None - использовать последнюю не скрытую сессию)
+            :param session_name: имя сессии
+            :param datetime_now: опциональное время записи
+            :return: True при успешном сохранении
+            """
+            try:
+                parts = data_string.split()
+                if len(parts) < 6:
+                    print("Error data: ", data_string)
+                    raise ValueError("Недостаточно данных в строке")
 
+                message_type_code = None
+                module_id = None
+                lat = None
+                lon = None
+                alt = None
+                message_number = None
 
-            message_type_code = None
-            module_id = None
-            lat = None
-            lon = None
-            alt = None
-            message_number = None
+                if len(parts) == 6 or len(parts) == 7:
+                    message_type_code = parts[0]
+                    if message_type_code == "GV":
+                        message_type_code = 1
+                    elif message_type_code == "GL":
+                        message_type_code = 0 
+                    else:
+                       message_type_code = int(message_type_code)
 
+                    module_id = int(parts[1], 16)
+                    lat, lon, alt = parts[2:5]
+                    message_number = int(parts[5])
 
-            if len(parts) == 6 or len(parts) == 7:
-                message_type_code = parts[0]
-                if message_type_code == "GV":
-                    message_type_code = 1
-                elif message_type_code == "GL":
-                    message_type_code = 0 
+                elif len(parts) == 10:
+                    message_type_code = parts[0]
+                    if message_type_code == "GV":
+                        message_type_code = 1
+                    elif message_type_code == "GL":
+                        message_type_code = 0 
+                    else:
+                       message_type_code = int(message_type_code)
+
+                    module_id = int(parts[1], 16)
+                    lat, lon, alt = parts[2:5]
+                    message_number = int(parts[9])
+
+                # Если session_id не указан, получаем id последней не скрытой сессии
+                if session_id is None:
+                    last_session = self.db.execute(
+                        "SELECT id FROM sessions WHERE hidden = 0 ORDER BY id DESC LIMIT 1",
+                        fetch=True
+                    )
+                    if last_session:
+                        id_session = last_session[0]['id']
+                    else:
+                        # Если нет ни одной не скрытой сессии, создаем новую
+                        id_session = self._get_or_create_session(session_id, session_name)
                 else:
-                   message_type_code = int(message_type_code)
+                    # Получаем или создаем связанные сущности
+                    id_session = self._get_or_create_session(session_id, session_name)
+                self._ensure_module_exists(module_id)
+                print("added data session: ", id_session)
+                # Обработка GPS данных
+                gps_ok = 1
+                try:
+                    lat_val = float(lat)
+                    lon_val = float(lon)
+                    alt_val = float(alt)
+                except ValueError:
+                    gps_ok = 0
+                    lat_val = lon_val = alt_val = None
 
-                module_id = int(parts[1], 16)
-                lat, lon, alt = parts[2:5]
-                message_number = int(parts[5])
+                # Сохранение данных
+                datetime_str = datetime_now or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-            elif len(parts) == 10:
-                message_type_code = parts[0]
-                if message_type_code == "GV":
-                    message_type_code = 1
-                elif message_type_code == "GL":
-                    message_type_code = 0 
-                else:
-                   message_type_code = int(message_type_code)
+                # Преобразование даты в Unix timestamp
+                datetime_obj = datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S")
+                datetime_unix = int(datetime_obj.timestamp())
 
-                module_id = int(parts[1], 16)
-                lat, lon, alt = parts[2:5]
-                message_number = int(parts[9])
+                self.db.execute(
+                    """
+                    INSERT INTO data 
+                    (id_module, id_session, id_message_type, datetime, datetime_unix,
+                     lat, lon, alt, gps_ok, message_number)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    params=(
+                        module_id, id_session, message_type_code, datetime_str, datetime_unix,
+                        lat_val, lon_val, alt_val, gps_ok, message_number
+                    )
+                )
 
-            # Если session_id не указан, получаем id последней не скрытой сессии
-            if session_id is None:
-                last_session = self.db.execute(
-                    "SELECT id FROM sessions WHERE hidden = 0 ORDER BY id DESC LIMIT 1",
+                # Получаем только что добавленную запись
+                added_data = self.db.execute(
+                    """
+                    SELECT * FROM data 
+                    WHERE id_module = ? AND id_session = ? AND message_number = ?
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    params=(module_id, id_session, message_number),
                     fetch=True
                 )
-                if last_session:
-                    id_session = last_session[0]['id']
-                else:
-                    # Если нет ни одной не скрытой сессии, создаем новую
-                    id_session = self._get_or_create_session(session_id, session_name)
-            else:
-                # Получаем или создаем связанные сущности
-                id_session = self._get_or_create_session(session_id, session_name)
-            self._ensure_module_exists(module_id)
-            print("added data session: ", id_session)
-            # Обработка GPS данных
-            gps_ok = 1
-            try:
-                lat_val = float(lat)
-                lon_val = float(lon)
-                alt_val = float(alt)
-            except ValueError:
-                gps_ok = 0
-                lat_val = lon_val = alt_val = None
 
-            # Сохранение данных
-            datetime_str = datetime_now or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                if not added_data:
+                    raise ValueError("Не удалось получить добавленные данные")
 
-            self.db.execute(
-                """
-                INSERT INTO data 
-                (id_module, id_session, id_message_type, datetime, 
-                 lat, lon, alt, gps_ok, message_number)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                params=(
-                    module_id, id_session, message_type_code, datetime_str,
-                    lat_val, lon_val, alt_val, gps_ok, message_number
+                # Получаем информацию о модуле из базы
+                module_info = self.db.execute(
+                    "SELECT name, color FROM module WHERE id = ?",
+                    params=(module_id,),
+                    fetch=True
                 )
-            )
 
-            # Получаем только что добавленную запись
-            added_data = self.db.execute(
-                """
-                SELECT * FROM data 
-                WHERE id_module = ? AND id_session = ? AND message_number = ?
-                ORDER BY id DESC LIMIT 1
-                """,
-                params=(module_id, id_session, message_number),
-                fetch=True
-            )
+                if module_info:
+                    module_name = module_info[0].get('name', "FFFF")
+                    module_color = module_info[0].get('color', "#00ff00")
 
-            if not added_data:
-                raise ValueError("Не удалось получить добавленные данные")
+                # Формируем словарь с результатами
+                result = {
+                    'id': added_data[0]['id'],
+                    'id_module': format(added_data[0]['id_module'], 'X'),
+                    'module_name': module_name,
+                    'module_color': module_color,
+                    'session_id': added_data[0]['id_session'],
+                    'message_type': added_data[0]['id_message_type'],
+                    'datetime': added_data[0]['datetime'],
+                    'datetime_unix': added_data[0]['datetime_unix'],
+                    'coords': {
+                        'lat': added_data[0]['lat'],
+                        'lon': added_data[0]['lon'],
+                        'alt': added_data[0]['alt']
+                    },
+                    'gps_ok': bool(added_data[0]['gps_ok']),
+                    'message_number': added_data[0]['message_number'],
+                    'status': "success",
+                    'message': "Данные модуля успешно добавлены"
+                }
 
-            # Получаем информацию о модуле из базы
-            module_info = self.db.execute(
-                "SELECT name, color FROM module WHERE id = ?",
-                params=(module_id,),
-                fetch=True
-            )
+                return result
 
-            if module_info:
-                module_name = module_info[0].get('name', "FFFF")
-                module_color = module_info[0].get('color', "#00ff00")
-
-            # Формируем словарь с результатами
-            result = {
-                'id': added_data[0]['id'],
-                'id_module': format(added_data[0]['id_module'], 'X'),
-                'module_name': module_name,
-                'module_color': module_color,
-
-                'session_id': added_data[0]['id_session'],
-                'message_type': added_data[0]['id_message_type'],
-                'datetime': added_data[0]['datetime'],
-                'coords': {
-                    'lat': added_data[0]['lat'],
-                    'lon': added_data[0]['lon'],
-                    'alt': added_data[0]['alt']
-                },
-                'gps_ok':bool(added_data[0]['gps_ok']),
-                'message_number': added_data[0]['message_number'],
-                'status': "success",
-                'message': "Данные модуля успешно добавлены"
-            }
-
-            return result
+            except Exception as e:
+                logging.error(f"Ошибка при обработке данных: {e}")
+                return False
         
-        except Exception as e:
-            logging.error(f"Ошибка при обработке данных: {e}")
-            return False
-
     def _get_session_by_id(self, session_id: int) -> dict | None:
         """
         Получаем данные сессии по ID. Возвращает None если сессия не найдена.
@@ -403,7 +406,7 @@ class DatabaseManager:
         return self.db.execute(
             """
             SELECT d.id, m.name as module_name, s.name as session_name, 
-                   mt.type as message_type, d.datetime, d.lat, d.lon, d.alt, 
+                   mt.type as message_type, d.datetime, d.datetime_unix, d.lat, d.lon, d.alt, 
                    d.gps_ok, d.message_number
             FROM data d
             JOIN module m ON d.id_module = m.id
@@ -544,6 +547,7 @@ class DatabaseManager:
                 'id_message_type': row['id_message_type'],
                 'message_type': row['message_type'],
                 'datetime': row['datetime'],
+                'datetime_unix': row['datetime_unix'],
                 'coords': {
                     'lat': lat,
                     'lon': lon,
@@ -563,7 +567,7 @@ class DatabaseManager:
         return self.db.execute(
                """
             SELECT d.id, m.name as module_name, s.name as session_name, 
-                   mt.type as message_type, d.datetime, d.lat, d.lon, d.alt, 
+                   mt.type as message_type, d.datetime, d.datetime_unix, d.lat, d.lon, d.alt, 
                    d.gps_ok, d.message_number
             FROM data d
             JOIN module m ON d.id_module = m.id
@@ -591,7 +595,7 @@ class DatabaseManager:
         return self.db.execute(
             """
             SELECT d.id, m.name as module_name, mt.type as message_type, 
-                   d.datetime, d.lat, d.lon, d.alt, d.gps_ok, d.message_number
+                   d.datetime, d.datetime_unix, d.lat, d.lon, d.alt, d.gps_ok, d.message_number
             FROM data d
             JOIN module m ON d.id_module = m.id
             JOIN message_type mt ON d.id_message_type = mt.id
@@ -632,16 +636,20 @@ class DatabaseManager:
             datetime_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             message_number = random.randint(1, 1000)
 
+            # Преобразование даты в Unix timestamp
+            datetime_obj = datetime.strptime(datetime_now, "%Y-%m-%d %H:%M:%S")
+            datetime_unix = int(datetime_obj.timestamp())
+            
             # Вставляем запись
             self.db.execute(
                 """
                 INSERT INTO data 
-                (id_module, id_session, id_message_type, datetime, 
+                (id_module, id_session, id_message_type, datetime, datetime_unix,
                  lat, lon, alt, gps_ok, message_number)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 params=(
-                    module_id, session_id, 1, datetime_now,
+                    module_id, session_id, 1, datetime_now, datetime_unix,
                     lat, lon, alt, 1, message_number
                 )
             )
@@ -681,6 +689,7 @@ class DatabaseManager:
                 'session_id': added_data[0]['id_session'],
                 'message_type': added_data[0]['id_message_type'],
                 'datetime': added_data[0]['datetime'],
+                'datetime_unix': added_data[0]['datetime_unix'],
                 'coords': {
                     'lat': added_data[0]['lat'],
                     'lon': added_data[0]['lon'],

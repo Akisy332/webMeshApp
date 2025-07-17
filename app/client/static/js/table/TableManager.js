@@ -45,7 +45,7 @@ class TableManager {
         // Обновляем хранилище данных
         messagesArray.forEach(message => {
             this.tableData[message.id_module] = {
-                datetime: message.datetime,
+                datetime: message.datetime_unix,
                 gps_ok: message.gps_ok,
                 alt: message.alt,
                 module_name: message.module_name,
@@ -70,7 +70,7 @@ class TableManager {
     createTableRow(message) {
         const row = document.createElement('tr');
         row.dataset.moduleId = message.id_module;
-        row.dataset.datetime = message.datetime;
+        row.dataset.datetime_unix = message.datetime_unix;
         row.dataset.gpsOk = message.gps_ok ? '1' : '0';
 
         // Ячейка статуса
@@ -125,8 +125,8 @@ class TableManager {
 
         // Время
         const timeCell = document.createElement('td');
-        timeCell.textContent = this.formatTime(message.datetime);
-        timeCell.dataset.originalTime = message.datetime;
+        timeCell.textContent = this.formatTime(message.datetime_unix);
+        timeCell.dataset.originalTime = message.datetime_unix;
         row.appendChild(timeCell);
 
         // Действия
@@ -139,7 +139,7 @@ class TableManager {
         row.appendChild(actionsCell);
 
         // Первоначальное обновление статуса
-        this.updateDotAndTooltip(statusDot, message.gps_ok, message.datetime);
+        this.updateDotAndTooltip(statusDot, message.gps_ok, message.datetime_unix);
 
         // Отложенная инициализация tooltip (если нужно)
         setTimeout(() => {
@@ -203,19 +203,19 @@ class TableManager {
 
     updateRowData(row, message) {
         this.tableData[message.id_module] = {
-            datetime: message.datetime,
+            datetime: message.datetime_unix,
             gps_ok: message.gps_ok,
             alt: message.coords.alt,
             module_name: message.module_name,
             module_color: message.module_color
         };
 
-        row.dataset.datetime = message.datetime;
+        row.dataset.datetime_unix = message.datetime_unix;
         row.dataset.gpsOk = message.gps_ok ? '1' : '0';
 
         const dot = row.querySelector('.status-dot');
         if (dot) {
-            this.updateDotAndTooltip(dot, message.gps_ok, message.datetime);
+            this.updateDotAndTooltip(dot, message.gps_ok, message.datetime_unix);
         }
 
         const altCell = row.querySelector('td:nth-child(5)');
@@ -225,8 +225,8 @@ class TableManager {
 
         const timeCell = row.querySelector('td:nth-child(6)');
         if (timeCell) {
-            timeCell.textContent = this.formatTime(message.datetime);
-            timeCell.dataset.originalTime = message.datetime;
+            timeCell.textContent = this.formatTime(message.datetime_unix);
+            timeCell.dataset.originalTime = message.datetime_unix;
         }
 
         const nameCell = row.querySelector('td:nth-child(4)');
@@ -267,30 +267,38 @@ class TableManager {
         }
     }
 
-    getStatusColor(gpsOk, datetime) {
+    getStatusColor(gpsOk, unixTimestamp) {
         const now = new Date();
-        const msgTime = new Date(datetime);
+        // Конвертируем Unix-время в миллисекунды, если нужно
+        const timestamp = typeof unixTimestamp === 'string' && unixTimestamp.length <= 10
+            ? unixTimestamp * 1000
+            : unixTimestamp;
+        const msgTime = new Date(timestamp);
         const diffSeconds = (now - msgTime) / 1000;
 
         if (gpsOk) {
-            if (diffSeconds < 60) return '#4CAF50';
-            if (diffSeconds < 300) return '#FFC107';
-            return '#F44336';
+            if (diffSeconds < 60) return '#4CAF50';  // зелёный
+            if (diffSeconds < 300) return '#FFC107'; // жёлтый
+            return '#F44336';                        // красный
         } else {
-            if (diffSeconds < 60) return '#2196F3';
-            if (diffSeconds < 300) return '#FFC107';
-            return '#F44336';
+            if (diffSeconds < 60) return '#2196F3';  // синий
+            if (diffSeconds < 300) return '#FFC107'; // жёлтый
+            return '#F44336';                        // красный
         }
     }
 
-    getTooltipText(gpsOk, datetime) {
+    getTooltipText(gpsOk, unixTimestamp) {
         const now = new Date();
-        const msgTime = new Date(datetime);
+        // Конвертируем Unix-время в миллисекунды, если нужно
+        const timestamp = typeof unixTimestamp === 'string' && unixTimestamp.length <= 10
+            ? unixTimestamp * 1000
+            : unixTimestamp;
+        const msgTime = new Date(timestamp);
         const diffSeconds = (now - msgTime) / 1000;
 
         if (gpsOk) {
             if (diffSeconds < 60) return 'Статус: Активен\nДанные свежие (<60 сек)';
-            if (diffSeconds < 3000) return 'Статус: Активен\nДанные устаревают (60-300 сек)';
+            if (diffSeconds < 300) return 'Статус: Активен\nДанные устаревают (60-300 сек)';
             return 'Статус: Активен\nДанные устарели (>300 сек)';
         } else {
             if (diffSeconds < 60) return 'Статус: Ошибка GPS\nНедавно (<60 сек)';
@@ -299,12 +307,15 @@ class TableManager {
         }
     }
 
-    formatTime(datetimeString) {
-        if (!datetimeString) return 'Н/Д';
+    formatTime(unixTimestamp) {
+        if (!unixTimestamp) return 'Н/Д';
 
-        const messageTime = new Date(datetimeString);
+        // Убедимся, что timestamp в миллисекундах (если приходит в секундах, умножаем на 1000)
+        const timestamp = unixTimestamp.toString().length <= 10 ? unixTimestamp * 1000 : unixTimestamp;
+
+        const messageTime = new Date(timestamp);
         if (isNaN(messageTime.getTime())) {
-            console.error('Invalid datetime string:', datetimeString);
+            console.error('Invalid timestamp:', unixTimestamp);
             return 'Н/Д';
         }
 
@@ -322,10 +333,12 @@ class TableManager {
 
             document.querySelectorAll('#table-body tr').forEach(row => {
                 try {
-                    const originalTime = row.dataset.datetime;
-                    if (!originalTime) return;
+                    const unixTimestamp = row.dataset.datetime_unix;
+                    if (!unixTimestamp) return;
 
-                    const messageTime = new Date(originalTime);
+                    // Конвертируем Unix-время в Date (проверяем, в секундах или миллисекундах)
+                    const timestamp = unixTimestamp.toString().length <= 10 ? unixTimestamp * 1000 : unixTimestamp;
+                    const messageTime = new Date(timestamp);
                     if (isNaN(messageTime.getTime())) return;
 
                     // Обновляем время
@@ -341,8 +354,8 @@ class TableManager {
                     const dot = row.querySelector('.status-dot');
                     if (dot) {
                         const gpsOk = row.dataset.gpsOk === '1';
-                        const color = this.getStatusColor(gpsOk, originalTime);
-                        const tooltipText = this.getTooltipText(gpsOk, originalTime);
+                        const color = this.getStatusColor(gpsOk, timestamp); // передаём timestamp вместо originalTime
+                        const tooltipText = this.getTooltipText(gpsOk, timestamp); // передаём timestamp вместо originalTime
 
                         dot.style.backgroundColor = color;
 
