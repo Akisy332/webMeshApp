@@ -23,18 +23,18 @@ function windowIndexReadyFunc() {
     //         });
     //     });
 
-    essenceCartBtn.addEventListener("click", function () {
-        window.location.href = "/database";
-    });
+    // essenceCartBtn.addEventListener("click", function () {
+    //     window.location.href = "/database";
+    // });
 
     initSessionList();
     initModalWindow();
 }
 
 // Обработчик кнопки - отправляем запрос на сервер
-document.getElementById('random-marker').addEventListener('click', function () {
-    eventBus.emit(EventTypes.APP.RANDOM_POINT);
-});
+// document.getElementById('random-marker').addEventListener('click', function () {
+//     eventBus.emit(EventTypes.APP.RANDOM_POINT);
+// });
 
 document.getElementById('add-data').addEventListener('click', function () {
     // Сбросить форму, если нужно

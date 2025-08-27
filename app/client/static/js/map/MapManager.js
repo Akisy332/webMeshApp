@@ -15,10 +15,23 @@ class MapManager {
             map_config.zoom
         );
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        this.osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap contributors',
             maxZoom: 19
         }).addTo(this.map);
+
+	// Альтернативный слой (например, GoogleSattelite)
+	this.GoogleSatteliteLayer = L.tileLayer('https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga', {
+	   attribution: '© GoogleSattelite',
+	   maxZoom: 19
+	});
+
+	// Добавляем переключатель слоёв
+	this.baseLayers = {
+	    "OpenStreetMap": this.osmLayer,
+	    "GoogleSattelite": this.GoogleSatteliteLayer
+	};
+	L.control.layers(this.baseLayers).addTo(this.map);
 
         // Хранилища для слоев, маркеров и путей
         this.layers = {};

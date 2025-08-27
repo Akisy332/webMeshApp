@@ -7,7 +7,9 @@
     margin: 0 auto;
 }
 
-
+.leaflet-control-attribution {
+    display: none !important;
+}
 
 .modal {
     z-index: 1060;
