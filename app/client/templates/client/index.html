@@ -1,15 +1,81 @@
 {% extends "client/base.html" %}
 
 {% block body %}
-<div class="container-fluid">
-    <div class="row">
-        <!-- Левая колонка с картой и контролами -->
-        <div class="container-fluid vh-100 d-flex flex-column" style="padding: 0;">
-            <div class="row flex-grow-1" style="margin: 0;">
-                <!-- Левая колонка с картой (занимает оставшееся место) -->
-                <div class="col-md-8 p-0 d-flex flex-column">
-                    <div id="map" class="flex-grow-1" style="min-height: 300px;"></div>
+<div class="container-fluid vh-100 d-flex p-0 position-relative">
+    <!-- Панель отладки слева - с абсолютным позиционированием -->
+    <div class="position-absolute h-100" id="debug-panel-container" style="z-index: 1000;">
+        <!-- Основная панель отладки -->
+        <div class="bg-light border-end h-100" id="debug-panel" style="width: 300px; overflow-y: auto;">
+            <div class="p-3">
+                <h6 class="fw-bold mb-3 text-center">Панель отладки</h6>
+                
+                <!-- Кнопки управления -->
+                <div class="mb-3">
+                    <button class="btn btn-sm btn-outline-primary w-100 mb-2" id="debug-test-btn">
+                        Тестовая кнопка
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary w-100" id="debug-clear-btn">
+                        Очистить логи
+                    </button>
+                </div>
 
+                <!-- Поля ввода -->
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Параметры:</label>
+                    <input type="text" class="form-control form-control-sm mb-2" 
+                           placeholder="Параметр 1" id="debug-param1">
+                    <input type="number" class="form-control form-control-sm mb-2" 
+                           placeholder="Параметр 2" id="debug-param2">
+                    <select class="form-select form-select-sm" id="debug-select">
+                        <option value="">Выберите опцию</option>
+                        <option value="option1">Опция 1</option>
+                        <option value="option2">Опция 2</option>
+                        <option value="option3">Опция 3</option>
+                    </select>
+                </div>
+
+                <!-- Переключатели -->
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Настройки:</label>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="debug-toggle1">
+                        <label class="form-check-label small" for="debug-toggle1">
+                            Включить отладку
+                        </label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="debug-toggle2" checked>
+                        <label class="form-check-label small" for="debug-toggle2">
+                            Показывать логи
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Логи -->
+                <div class="mt-3">
+                    <label class="form-label small fw-semibold">Логи:</label>
+                    <div id="debug-logs" class="bg-dark text-white p-2 small" 
+                         style="height: 150px; overflow-y: auto; font-family: monospace;">
+                        <!-- Логи будут здесь -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Кнопка скрытия/показа -->
+    <button class="btn btn-secondary position-absolute" id="debug-toggle-btn" 
+            style="top: 10px; left: 10px; z-index: 1001; padding: 5px 8px;">
+        ◀
+    </button>
+
+    <!-- Основной контент -->
+    <div class="flex-grow-1 d-flex flex-column" style="min-height: 0;">
+        <div class="container-fluid h-100 d-flex flex-column p-0">
+            <div class="row flex-grow-1 m-0">
+                <!-- Левая колонка с картой -->
+                <div class="col-md-8 p-0 d-flex flex-column position-relative">
+                    <div id="map" class="flex-grow-1" style="min-height: 300px;"></div>
                 </div>
 
                 <!-- Правая колонка с таблицей -->
@@ -150,7 +216,45 @@
 
 {% block styles %}
 <link href="{{ url_for('client.static',filename='css/main.css') }}" rel="stylesheet" />
-
+<style>
+    #debug-panel-container {
+        transition: transform 0.3s ease;
+        width: 300px;
+        left: 0;
+        top: 0;
+        transform: translateX(0);
+    }
+    
+    #debug-panel {
+        height: 100%;
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+        background: white;
+    }
+    
+    .debug-panel-hidden {
+        transform: translateX(-100%) !important;
+    }
+    
+    #debug-toggle-btn {
+        position: absolute;
+        z-index: 1001;
+        padding: 8px 12px;
+        border-radius: 6px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        transition: left 0.3s ease;
+        top: 50%;
+        transform: translateY(-50%);
+    }
+    
+    .container-fluid.vh-100 {
+        height: 100vh !important;
+    }
+    
+    #map {
+        position: relative;
+        z-index: 1;
+    }
+</style>
 {% endblock %}
 
 <!--  -->
@@ -180,4 +284,99 @@
 <!-- подключение скрипта иницилизации главной страницы -->
 <script type="text/javascript" src="{{ url_for('client.static', filename='js/index/index_main.js') }}"></script>
 
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const debugPanelContainer = document.getElementById('debug-panel-container');
+        const debugToggleBtn = document.getElementById('debug-toggle-btn');
+        const debugLogs = document.getElementById('debug-logs');
+        const debugClearBtn = document.getElementById('debug-clear-btn');
+        const debugTestBtn = document.getElementById('debug-test-btn');
+        
+        // Переключение видимости панели
+        debugToggleBtn.addEventListener('click', function() {
+            debugPanelContainer.classList.toggle('debug-panel-hidden');
+            updateToggleButtonPosition();
+            updateToggleButtonText();
+            savePanelState();
+        });
+
+        // Функция для обновления позиции кнопки
+        function updateToggleButtonPosition() {
+        requestAnimationFrame(() => {
+            const isHidden = debugPanelContainer.classList.contains('debug-panel-hidden');
+            
+            if (isHidden) {
+                debugToggleBtn.style.left = '10px';
+                debugToggleBtn.style.top = '50%'; // Центр по вертикали
+                debugToggleBtn.style.transform = 'translateY(-50%)'; // Точное центрирование
+            } else {
+                debugToggleBtn.style.left = '310px'; // 300px + 10px
+                debugToggleBtn.style.top = '50%'; // Центр по вертикали
+                debugToggleBtn.style.transform = 'translateY(-50%)'; // Точное центрирование
+            }
+        });
+        }
+        
+        // Также нужно обновлять позицию при ресайзе и скролле
+        window.addEventListener('resize', updateToggleButtonPosition);
+        window.addEventListener('scroll', updateToggleButtonPosition);
+        
+        // И вызвать после анимации переключения
+        setTimeout(updateToggleButtonPosition, 300);
+
+        
+        // Обновление текста кнопки переключения
+        function updateToggleButtonText() {
+            const isHidden = debugPanelContainer.classList.contains('debug-panel-hidden');
+            debugToggleBtn.textContent = isHidden ? '▶' : '◀';
+            debugToggleBtn.title = isHidden ? 'Показать панель' : 'Скрыть панель';
+        }
+        
+        // Сохранение состояния панели
+        function savePanelState() {
+            const isHidden = debugPanelContainer.classList.contains('debug-panel-hidden');
+            localStorage.setItem('debugPanelHidden', isHidden);
+        }
+        
+        // Загрузка состояния панели
+        function loadPanelState() {
+            const savedState = localStorage.getItem('debugPanelHidden');
+            if (savedState === 'true') {
+                debugPanelContainer.classList.add('debug-panel-hidden');
+            }
+            updateToggleButtonPosition();
+            updateToggleButtonText();
+        }
+        
+        // Инициализация
+        loadPanelState();
+
+        // Очистка логов
+        debugClearBtn.addEventListener('click', function() {
+            debugLogs.innerHTML = '';
+            addLog('Логи очищены');
+        });
+        
+        // Тестовая кнопка
+        debugTestBtn.addEventListener('click', function() {
+            addLog('Тестовая кнопка нажата');
+        });
+        
+        // Функция для добавления записей в лог
+        function addLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            debugLogs.appendChild(logEntry);
+            debugLogs.scrollTop = debugLogs.scrollHeight;
+        }
+        
+        addLog('Панель отладки инициализирована');
+        
+        // Обработка ошибок
+        window.addEventListener('error', function(e) {
+            addLog(`Ошибка: ${e.message}`);
+        });
+    });
+</script>
 {% endblock %}
