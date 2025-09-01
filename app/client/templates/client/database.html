@@ -174,31 +174,31 @@
                 });
 
             // Fetch and display data records
-            fetch('/api/database/data')
-                .then(response => response.json())
-                .then(data => {
-                    const tableBody = document.getElementById('data-table');
-                    tableBody.innerHTML = '';
-                    data.forEach(record => {
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td>${record.id}</td>
-                            <td>${record.module_name}</td>
-                            <td>${record.session_name}</td>
-                            <td>${record.message_type}</td>
-                            <td>${record.datetime}</td>
-                            <td>${record.lat || 'N/A'}</td>
-                            <td>${record.lon || 'N/A'}</td>
-                            <td>${record.alt || 'N/A'}</td>
-                            <td>${record.gps_ok ? 'Yes' : 'No'}</td>
-                            <td>${record.message_number}</td>
-                        `;
-                        tableBody.appendChild(row);
-                    });
-                    
-                    // Create packets statistics chart
-                    createPacketsChart(data);
-                });
+            // fetch('/api/database/data')
+            //     .then(response => response.json())
+            //     .then(data => {
+            //         const tableBody = document.getElementById('data-table');
+            //         tableBody.innerHTML = '';
+            //         data.forEach(record => {
+            //             const row = document.createElement('tr');
+            //             row.innerHTML = `
+            //                 <td>${record.id}</td>
+            //                 <td>${record.module_name}</td>
+            //                 <td>${record.session_name}</td>
+            //                 <td>${record.message_type}</td>
+            //                 <td>${record.datetime}</td>
+            //                 <td>${record.lat || 'N/A'}</td>
+            //                 <td>${record.lon || 'N/A'}</td>
+            //                 <td>${record.alt || 'N/A'}</td>
+            //                 <td>${record.gps_ok ? 'Yes' : 'No'}</td>
+            //                 <td>${record.message_number}</td>
+            //             `;
+            //             tableBody.appendChild(row);
+            //         });
+            //         
+            //         // Create packets statistics chart
+            //         createPacketsChart(data);
+            //     });
         }
 
         function createPacketsChart(data) {

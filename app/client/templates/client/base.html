@@ -76,6 +76,15 @@
             src="https://cdn.socket.io/4.7.2/socket.io.min.js"
         ></script>
 
+        <!-- подключение скрипта со всеми возможными Events -->
+        <script type="text/javascript" src="{{ url_for('client.static', filename='js/core/events.js') }}"></script>
+
+        <!-- подключение скрипта для управления своими Events -->
+        <script type="text/javascript" src="{{ url_for('client.static', filename='js/core/event-service.js') }}"></script>
+
+        <!-- подключение скрипта для управления сокетом через Events -->
+        <script type="text/javascript" src="{{ url_for('client.static', filename='js/core/socket-service.js') }}"></script>
+        
         {#
         {% comment %} <!-- Подключение скриптов MDB -->
         <script
