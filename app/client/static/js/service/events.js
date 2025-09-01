@@ -18,8 +18,9 @@ window.EventTypes = {
         // ROW_SELECTED: 'tableRowSelected',
         // ROW_UPDATED: 'tableRowUpdated'
     },
-    MAP: {
-
+    ROUTE_SLIDER: {
+        TIME_SLIDER_CHANGED: 'time_slider_changed',
+        TIME_RANGE_CHANGED: 'time_range_changed',
     },
     SESSION: {
         LIST_LOADED: 'session_list_loaded',

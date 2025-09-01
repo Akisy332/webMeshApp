@@ -431,7 +431,8 @@ class DatabaseManager:
         :param id_message_type: Опциональный фильтр по типу сообщения
         :return: Словарь с координатами и цветом модуля:
                  {
-                     'coordinates': список кортежей (lat, lon),
+                     'coords': список кортежей (lat, lon),
+                     'timestamps': список времени каждой точки
                      'module_color': цвет модуля из таблицы modules,
                      'module_name': название модуля
                  }
@@ -452,7 +453,7 @@ class DatabaseManager:
 
         # Затем получаем координаты
         query = """
-            SELECT lat, lon
+            SELECT lat, lon, datetime_unix
             FROM data
             WHERE id_module = ? 
               AND id_session = ?
@@ -471,10 +472,12 @@ class DatabaseManager:
 
         result = self.db.execute(query, params=tuple(params), fetch=True)
         coordinates = [(row['lat'], row['lon']) for row in result]
+        timestamps = [(row['datetime_unix']) for row in result]
 
         return {
             'message': f"Данные о треке модуля {id_module}",
             'coords': coordinates,
+            'timestamps': timestamps,
             'module_color': module_color,
             'id_module': format(id_module, 'X'),
             'module_name': module_name
