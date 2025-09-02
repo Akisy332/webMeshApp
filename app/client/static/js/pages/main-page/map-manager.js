@@ -7,7 +7,7 @@ class SegmentedPath {
         this.color = color;
         this.maxPointsPerSegment = maxPointsPerSegment;
 
-        this.isLiveMode = false
+        this.isLiveMode = true
 
         // Все точки пути (включая те, что еще не отображаются)
         this.allPoints = [];
@@ -150,12 +150,16 @@ class SegmentedPath {
         let pointsProcessed = 0;
         let lastVisibleSegment = -1;
 
+        // Если в режиме реального времени, показываем все точки
+        // Если в режиме ползунка, показываем только точки до текущего времени
+        const pointsToShow = this.isLiveMode ? this.allPoints : this.visiblePoints;
+
         for (let segIdx = 0; segIdx < this.segments.length; segIdx++) {
             const segment = this.segments[segIdx];
             const segmentEndIndex = pointsProcessed + segment.length - 1;
 
             // Если этот сегмент полностью видим
-            if (segmentEndIndex < this.visiblePoints.length) {
+            if (segmentEndIndex < pointsToShow.length) {
                 this.segmentPaths[segIdx].setLatLngs(segment.map(p => p.latlng));
                 this.segmentPaths[segIdx].setStyle({
                     opacity: this.visible ? 1 : 0,
@@ -164,8 +168,8 @@ class SegmentedPath {
                 lastVisibleSegment = segIdx;
             }
             // Если часть сегмента видима
-            else if (pointsProcessed < this.visiblePoints.length) {
-                const visibleInSegment = this.visiblePoints.slice(pointsProcessed, this.visiblePoints.length);
+            else if (pointsProcessed < pointsToShow.length) {
+                const visibleInSegment = pointsToShow.slice(pointsProcessed, pointsToShow.length);
                 this.segmentPaths[segIdx].setLatLngs(visibleInSegment.map(p => p.latlng));
                 this.segmentPaths[segIdx].setStyle({
                     opacity: this.visible ? 1 : 0,
@@ -181,8 +185,8 @@ class SegmentedPath {
         }
 
         // Обновляем маркер
-        if (this.visiblePoints.length > 0) {
-            const lastPoint = this.visiblePoints[this.visiblePoints.length - 1];
+        if (pointsToShow.length > 0) {
+            const lastPoint = pointsToShow[pointsToShow.length - 1];
             this.marker.setLatLng(lastPoint.latlng);
             this.marker.setOpacity(this.visible ? 1 : 0);
         } else {
@@ -194,7 +198,7 @@ class SegmentedPath {
     toggleVisibility() {
         this.visible = !this.visible;
         this.updateSegmentsDisplay();
-        this.marker.setOpacity(this.visible && this.visiblePoints.length > 0 ? 1 : 0);
+        this.marker.setOpacity(this.visible && (this.isLiveMode ? this.allPoints.length > 0 : this.visiblePoints.length > 0) ? 1 : 0);
         return this.visible;
     }
 
@@ -430,6 +434,8 @@ class MapManager {
 
         this.currentSession = null;
 
+        this.isLiveMode = true;
+
 
         eventBus.on(EventTypes.TABLE.CHECKBOX_MARKER, data => {
             this.setMarkerVisible(data.id_module, data.flag);
@@ -454,6 +460,14 @@ class MapManager {
             });
         });
 
+
+        eventBus.on(EventTypes.ROUTE_SLIDER.TIME_SLIDER_TOGGLE, checked => {
+            this.isLiveMode = !checked;
+            this.paths.forEach((path) => {
+                path.isLiveMode = !checked;
+                path.updateSegmentsDisplay();
+            });
+        });
         // Подписка на событие загрузки новой сессии
         eventBus.on(EventTypes.SESSION.LOAD_DATA, (sessionData) => {
             this.clearMap();
@@ -494,28 +508,29 @@ class MapManager {
     }
 
     addOrUpdateMarker(data) {
-        if (!data || !data.id_module) return;
+        // if (!data || !data.id_module) return;
 
-        let marker = this.markers.get(data.id_module);
-        if (data.coords.lat != null && data.coords.lon != null) {
-            const latlng = [data.coords.lat, data.coords.lon];
+        // let marker = this.markers.get(data.id_module);
+        // if (data.coords.lat != null && data.coords.lon != null) {
+        //     const latlng = [data.coords.lat, data.coords.lon];
 
-            if (marker) {
-                marker.setLatLng(latlng);
-                marker.setPopupContent(data.module_name || data.id_module);
-                marker.setIcon(this.createCustomIcon(data.module_color || '#FF0000'));
+        //     if (marker) {
+        //         marker.setLatLng(latlng);
+        //         marker.setPopupContent(data.module_name || data.id_module);
+        //         marker.setIcon(this.createCustomIcon(data.module_color || '#FF0000'));
 
-            } else {
-                console.log("Create marker", data.id_module)
-                marker = L.marker(latlng, {
-                    icon: this.createCustomIcon(data.module_color || '#FF0000')
-                }).bindPopup(data.module_name || data.id_module);
+        //     } else {
+        //         console.log("Create marker", data.id_module)
+        //         marker = L.marker(latlng, {
+        //             icon: this.createCustomIcon(data.module_color || '#FF0000')
+        //         }).bindPopup(data.module_name || data.id_module);
 
-                marker.addTo(this.map);
+        //         marker.addTo(this.map);
 
-                this.markers.set(data.id_module, marker);
-            }
-        }
+        //         this.markers.set(data.id_module, marker);
+        //     }
+        // }
+        return
     }
 
     setMarkerVisible(id_module, flag) {
@@ -567,15 +582,16 @@ class MapManager {
             : [data.coords];
 
         if (!path) {
-            console.log("Create Trace for marker ", data.id_module)
+            console.log("Create Trace for marker ", data.id_module);
             // Создаем новый путь со всеми координатами
             // path = L.polyline(coords, {
             //     color: data.module_color || '#FF0000',
             //     weight: data.width || 2
             // }).addTo(this.map);
 
-            path = new SegmentedPath(this.map, data.module_color || '#FF0000')
-            path.setLatLngs(coords, data.timestamps)
+            path = new SegmentedPath(this.map, data.module_color || '#FF0000');
+            path.isLiveMode = this.isLiveMode;
+            path.setLatLngs(coords, data.timestamps);
 
             this.paths.set(data.id_module, path);
 

@@ -151,20 +151,228 @@
 
 /* Стили для временного ползунка маршрута */
 #route-time-slider-container {
-    transition: opacity 0.3s ease;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 
-.route-time-btn {
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-}
-
+/* Стили для ползунка */
 #route-time-slider {
-    cursor: pointer;
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(241, 243, 245, 0.7);
+    border: 1px solid rgba(233, 236, 239, 0.6);
+    transition: all 0.15s ease;
+}
+
+#route-time-slider:hover {
+    background: rgba(233, 236, 239, 0.8);
+}
+
+#route-time-slider::-webkit-slider-thumb {
+    width: 14px;
+    height: 14px;
+    background: #28a745;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 4px rgba(40, 167, 69, 0.25);
+    transition: all 0.15s ease;
+}
+
+#route-time-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 5px rgba(40, 167, 69, 0.35);
+}
+
+#route-time-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #28a745;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 4px rgba(40, 167, 69, 0.25);
+    transition: all 0.15s ease;
+}
+
+#route-time-slider::-moz-range-thumb:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 5px rgba(40, 167, 69, 0.35);
+}
+
+/* Эффекты для кнопки пуск */
+#route-time-play {
+    transition: all 0.2s ease;
+    background: linear-gradient(145deg, rgba(40, 167, 69, 0.95), rgba(32, 201, 151, 0.95));
+    border: none !important;
+    width: 36px;
+    height: 36px;
+}
+
+#route-time-play:hover {
+    transform: scale(1.06);
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3) !important;
+    opacity: 1 !important;
+}
+
+#route-time-play:active {
+    transform: scale(0.95);
+}
+
+/* Стили для кнопок перемотки */
+#route-time-prev,
+#route-time-next {
+    transition: all 0.15s ease;
+    border-width: 1px;
+    font-weight: 500;
+    padding: 0.35rem 0.7rem;
+    min-width: 45px;
+    border-radius: 6px;
+    border-color: rgba(108, 117, 125, 0.4);
+}
+
+#route-time-prev:hover,
+#route-time-next:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 1px 4px rgba(108, 117, 125, 0.1);
+    background-color: rgba(248, 249, 250, 0.8);
+    opacity: 1 !important;
+}
+
+/* Стиль для активного состояния кнопки пуск (пауза) */
+#route-time-play.playing {
+    background: linear-gradient(145deg, rgba(220, 53, 69, 0.95), rgba(200, 35, 51, 0.95));
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+    #route-time-slider-container {
+        left: 10px !important;
+        right: 10px !important;
+        transform: none !important;
+        min-width: unset !important;
+        padding: 10px 14px !important;
+        bottom: 10px !important;
+        border-radius: 18px !important;
+        width: calc(100% - 20px) !important;
+        max-width: unset !important;
+        background: rgba(255, 255, 255, 0.92);
+    }
+
+    /* Первая строка - время */
+    .mobile-time-row {
+        flex-direction: row !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        margin-bottom: 12px !important;
+    }
+
+    .mobile-time-text {
+        font-size: 0.75em !important;
+        min-width: 50px !important;
+        text-align: center;
+        flex: 1;
+        opacity: 0.85 !important;
+    }
+
+    .mobile-current-time {
+        min-width: 68px !important;
+        padding: 0.3rem 0.6rem !important;
+        margin: 0 4px;
+        text-align: center;
+        background: rgba(248, 249, 250, 0.85) !important;
+    }
+
+    #route-time-current {
+        font-size: 0.8em !important;
+    }
+
+    /* Вторая строка - кнопки */
+    .mobile-controls-row {
+        width: 100%;
+        justify-content: center !important;
+    }
+
+    .mobile-control-btn {
+        min-width: 40px !important;
+        padding: 0.3rem 0.6rem !important;
+        font-size: 0.85em;
+    }
+
+    .mobile-play-btn {
+        width: 34px !important;
+        height: 34px !important;
+        margin: 0 12px !important;
+    }
+}
+
+/* Дополнительные медиа-запросы для очень маленьких экранов */
+@media (max-width: 480px) {
+    #route-time-slider-container {
+        padding: 8px 12px !important;
+        border-radius: 16px !important;
+    }
+
+    .mobile-time-text {
+        font-size: 0.7em !important;
+        min-width: 45px !important;
+    }
+
+    .mobile-current-time {
+        min-width: 62px !important;
+        padding: 0.25rem 0.5rem !important;
+    }
+
+    #route-time-current {
+        font-size: 0.75em !important;
+    }
+
+    .mobile-control-btn {
+        min-width: 36px !important;
+        padding: 0.25rem 0.5rem !important;
+        font-size: 0.8em;
+    }
+
+    .mobile-play-btn {
+        width: 32px !important;
+        height: 32px !important;
+        margin: 0 10px !important;
+    }
+}
+
+/* Анимация появления */
+@keyframes slideUpFade {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 15px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+#route-time-slider-container:not(.d-none) {
+    animation: slideUpFade 0.3s ease-out;
+}
+
+/* Для мобильных анимация без transform */
+@media (max-width: 768px) {
+    #route-time-slider-container:not(.d-none) {
+        animation: mobileSlideUpFade 0.3s ease-out;
+        transform: none !important;
+    }
+
+    @keyframes mobileSlideUpFade {
+        from {
+            opacity: 0;
+            transform: translateY(12px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
 }
 
 #debug-panel-container {

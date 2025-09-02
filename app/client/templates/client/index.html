@@ -125,21 +125,48 @@
     </div>
 </div>
 
-<!-- Контейнер для временного ползунка маршрута -->
-<div id="route-time-slider-container" class="position-fixed d-none" style="bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1002; background: rgba(255, 255, 255, 0.9); padding: 15px; border-radius: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); min-width: 400px;">
-    <div class="d-flex align-items-center" style="gap: 15px;">
-        <button class="btn btn-sm btn-outline-secondary route-time-btn" id="route-time-prev">
+<div id="route-time-slider-container" class="position-fixed d-none" style="bottom: 15px; left: 50%; transform: translateX(-50%); z-index: 1002; background: rgba(255, 255, 255, 0.88); padding: 12px 18px; border-radius: 20px; box-shadow: 0 4px 25px rgba(0,0,0,0.18); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.4); min-width: 600px; max-width: 80vw;">
+    
+    <!-- Ползунок времени - ПЕРВАЯ СТРОКА -->
+    <div class="mb-2">
+        <input type="range" class="form-range" id="route-time-slider" min="0" max="1000" value="0" step="1" style="width: 100%;">
+    </div>
+    
+    <!-- ПЕРВАЯ СТРОКА: время начала, текущее время и время конца -->
+    <div class="d-flex align-items-center justify-content-between mb-2 mobile-time-row">
+        <!-- Время начала -->
+        <div class="text-muted fw-medium mobile-time-text" style="opacity: 0.9;">
+            <span id="route-time-start">00:00:00</span>
+        </div>
+        
+        <!-- Текущее время -->
+        <div class="bg-light rounded-2 px-2 py-1 mobile-current-time" style="background: rgba(248, 249, 250, 0.9) !important; border: 1px solid rgba(0,0,0,0.08);">
+            <span id="route-time-current" class="fw-bold text-dark">
+                00:00:00
+            </span>
+        </div>
+        
+        <!-- Время конца -->
+        <div class="text-muted fw-medium mobile-time-text text-end" style="opacity: 0.9;">
+            <span id="route-time-end">00:00:00</span>
+        </div>
+    </div>
+    
+    <!-- ВТОРАЯ СТРОКА: кнопки управления -->
+    <div class="d-flex align-items-center justify-content-center mobile-controls-row">
+        <!-- Кнопка перемотки назад -->
+        <button class="btn btn-outline-secondary btn-sm mobile-control-btn" id="route-time-prev" style="opacity: 0.9;">
             ◀
         </button>
-        <div class="d-flex flex-column align-items-center" style="flex: 1;">
-            <input type="range" class="form-range" id="route-time-slider" min="0" max="1000" value="0" step="1" style="width: 100%;">
-            <div class="d-flex justify-content-between w-100 mt-1">
-                <small id="route-time-start" class="text-muted">00:00:00</small>
-                <small id="route-time-current" class="text-muted fw-bold">00:00:00</small>
-                <small id="route-time-end" class="text-muted">00:00:00</small>
-            </div>
-        </div>
-        <button class="btn btn-sm btn-outline-secondary route-time-btn" id="route-time-next">
+        
+        <!-- Кнопка пуск/пауза -->
+        <button class="btn btn-success rounded-circle d-flex align-items-center justify-content-center mx-2 mobile-play-btn" 
+                id="route-time-play" style="opacity: 0.95;">
+            <span style="font-size: 0.85em; margin-left: 1px;">▶</span>
+        </button>
+        
+        <!-- Кнопка перемотки вперед -->
+        <button class="btn btn-outline-secondary btn-sm mobile-control-btn" id="route-time-next" style="opacity: 0.9;">
             ▶
         </button>
     </div>
