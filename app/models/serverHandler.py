@@ -123,10 +123,9 @@ class TCPClientWorker:
                     if len(parts) < 2:
                         print(f"Некорректное сообщение: {line}")
                         continue
-                    
-                    # Последний элемент - номер пакета, остальное - данные
-                    *message_parts, packet_num = parts
-                    full_message = " ".join(message_parts)
+                    packet_num = parts[-2]  # второй й с конца
+                    message_parts = parts[:-2]  # все кроме предпоследнего
+                    full_message = " ".join(message_parts) + f" {parts[-1]}"
 
                     # Теперь можно обработать сообщение
                     print(f"Получено: {full_message} (пакет #{packet_num}) ")

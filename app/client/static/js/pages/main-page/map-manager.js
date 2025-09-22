@@ -622,17 +622,48 @@ class MapManager {
         // Получаем текущий путь
         let path = this.paths.get(data.id_module);
 
-        // Если coords - массив массивов (множество точек)
-        const coords = Array.isArray(data.coords[0]) &&
-            (typeof data.coords[0][0] === 'number' || Array.isArray(data.coords[0][0]))
-            ? data.coords
-            : [data.coords];
+        // Обработка разных форматов координат
+        let coords = [];
+        let timestamps = null;
 
-        if (path) {
-            // Если путь существует, обновляем его координаты
-            const currentCoords = path.getLatLngs();
-            const newCoords = [...currentCoords, ...coords];
-            path.setLatLngs(newCoords);
+        if (Array.isArray(data.coords)) {
+            // Если coords - массив массивов (множество точек)
+            if (Array.isArray(data.coords[0]) &&
+                (typeof data.coords[0][0] === 'number' || Array.isArray(data.coords[0][0]))) {
+                coords = data.coords;
+            }
+            // Если coords - массив словарей [{lat: ..., lon: ...}, ...]
+            else if (typeof data.coords[0] === 'object' && data.coords[0] !== null) {
+                coords = data.coords.map(coord => {
+                    if (coord.lat !== undefined && coord.lon !== undefined) {
+                        return [coord.lat, coord.lon];
+                    } else if (coord.latitude !== undefined && coord.longitude !== undefined) {
+                        return [coord.latitude, coord.longitude];
+                    }
+                    return null;
+                }).filter(coord => coord !== null);
+            }
+        }
+        // Если coords - одиночный словарь {lat: ..., lon: ...}
+        else if (typeof data.coords === 'object' && data.coords !== null) {
+            if (data.coords.lat !== undefined && data.coords.lon !== undefined) {
+                coords = [[data.coords.lat, data.coords.lon]];
+            } else if (data.coords.latitude !== undefined && data.coords.longitude !== undefined) {
+                coords = [[data.coords.latitude, data.coords.longitude]];
+            }
+        }
+
+        // Обработка временных меток
+        if (data.datetime_unix !== undefined) {
+            if (Array.isArray(data.datetime_unix)) {
+                timestamps = data.datetime_unix;
+            } else if (typeof data.datetime_unix === 'number') {
+                timestamps = [data.datetime_unix];
+            }
+        }
+
+        if (path && coords.length > 0) {
+            path.addLatLngs(coords, timestamps);
 
             path.setStyle({
                 color: data.module_color || '#FF0000',

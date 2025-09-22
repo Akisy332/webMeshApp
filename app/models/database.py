@@ -43,6 +43,10 @@ def init_tables():
                 alt REAL,
                 gps_ok INTEGER,
                 message_number INTEGER,
+                rssi INTEGER,
+                snr INTEGER,
+                source INTEGER,
+                jumps INTEGER,
                 FOREIGN KEY(id_module) REFERENCES module(id),
                 FOREIGN KEY(id_session) REFERENCES sessions(id),
                 FOREIGN KEY(id_message_type) REFERENCES message_type(id)
@@ -116,8 +120,12 @@ class DatabaseManager:
                 lon = None
                 alt = None
                 message_number = None
+                rssi = None
+                snr = None
+                source = None
+                jumps = None
 
-                if len(parts) == 6 or len(parts) == 7:
+                if len(parts) == 7:
                     message_type_code = parts[0]
                     if message_type_code == "GV":
                         message_type_code = 1
@@ -129,6 +137,11 @@ class DatabaseManager:
                     module_id = int(parts[1], 16)
                     lat, lon, alt = parts[2:5]
                     message_number = int(parts[5])
+                    
+                    if ':' in parts[6]:
+                        rssi, snr = parts[6].split(':')
+                    elif 'R' in parts[6]:
+                        source, jumps = parts[6].split('R')
 
                 elif len(parts) == 10:
                     message_type_code = parts[0]
@@ -142,6 +155,8 @@ class DatabaseManager:
                     module_id = int(parts[1], 16)
                     lat, lon, alt = parts[2:5]
                     message_number = int(parts[9])
+                    
+                
 
                 # Если session_id не указан, получаем id последней не скрытой сессии
                 if session_id is None:
@@ -180,12 +195,12 @@ class DatabaseManager:
                     """
                     INSERT INTO data 
                     (id_module, id_session, id_message_type, datetime, datetime_unix,
-                     lat, lon, alt, gps_ok, message_number)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     lat, lon, alt, gps_ok, message_number, rssi, snr, source, jumps)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     params=(
                         module_id, id_session, message_type_code, datetime_str, datetime_unix,
-                        lat_val, lon_val, alt_val, gps_ok, message_number
+                        lat_val, lon_val, alt_val, gps_ok, message_number, rssi, snr, source, jumps
                     )
                 )
 
@@ -229,6 +244,10 @@ class DatabaseManager:
                         'lon': added_data[0]['lon'],
                         'alt': added_data[0]['alt']
                     },
+                    'rssi': added_data[0]['rssi'],
+                    'snr': added_data[0]['snr'],
+                    'source': added_data[0]['source'],
+                    'jumps': added_data[0]['jumps'],
                     'gps_ok': bool(added_data[0]['gps_ok']),
                     'message_number': added_data[0]['message_number'],
                     'status': "success",
@@ -556,6 +575,10 @@ class DatabaseManager:
                     'lon': lon,
                     'alt': alt if alt is not None else 0.0  # Можно установить значение по умолчанию для alt
                 },
+                'rssi': row['rssi'],
+                'snr': row['snr'],
+                'source': row['source'],
+                'jumps': row['jumps'],
                 'gps_ok': bool(row['gps_ok']),
                 'message_number': row['message_number']
             })

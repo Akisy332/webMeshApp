@@ -40,8 +40,6 @@ class TableManager {
         // Приводим входные данные к массиву, если это не массив
         const messagesArray = Array.isArray(messages) ? messages : [messages];
 
-        console.log("test", messagesArray);
-
         // Обновляем хранилище данных
         messagesArray.forEach(message => {
             this.tableData[message.id_module] = {
@@ -137,6 +135,16 @@ class TableManager {
         this.setupDeleteButton(deleteBtn, message.id_module, message.module_name);
         actionsCell.appendChild(deleteBtn);
         row.appendChild(actionsCell);
+
+        // test
+        const testCell = document.createElement('td');
+        if (message.rssi !== null && message.snr !== null)
+            testCell.textContent = `${message.rssi} : ${message.snr}`;
+        else if (message.source !== null && message.jumps !== null)
+            testCell.textContent = `${message.source} R ${message.jumps}`;
+        else
+            testCell.textContent = `Null`;
+        row.appendChild(testCell);
 
         // Первоначальное обновление статуса
         this.updateDotAndTooltip(statusDot, message.gps_ok, message.datetime_unix);
@@ -234,6 +242,20 @@ class TableManager {
             nameCell.textContent = message.module_name;
             nameCell.style.color = message.module_color;
         }
+
+        // test
+        const testCell = row.querySelector('td:nth-child(8)');
+        if (testCell) {
+            if (message.rssi !== null && message.snr !== null)
+                testCell.textContent = `${message.rssi} : ${message.snr}`;
+            else if (message.source !== null && message.jumps !== null)
+                testCell.textContent = `${message.source} R ${message.jumps}`;
+            else
+                testCell.textContent = `Null`;
+        }
+
+
+
     }
 
     updateDotAndTooltip(dot, gpsOk, datetime) {
