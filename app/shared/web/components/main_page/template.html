@@ -1,4 +1,4 @@
-{% extends "client/base.html" %}
+{% extends "base/base.html" %}
 
 {% block body %}
 <div class="container-fluid vh-100 d-flex p-0 position-relative">
@@ -8,7 +8,7 @@
         <div class="bg-light border-end h-100" id="debug-panel" style="width: 300px; overflow-y: auto;">
             <div class="p-3">
                 <h6 class="fw-bold mb-3 text-center">Панель отладки</h6>
-                
+
                 <!-- Кнопки управления -->
                 <div class="mb-3">
                     <button class="btn btn-sm btn-outline-primary w-100 mb-2" id="debug-test-btn">
@@ -22,10 +22,10 @@
                 <!-- Поля ввода -->
                 <div class="mb-3">
                     <label class="form-label small fw-semibold">Параметры:</label>
-                    <input type="text" class="form-control form-control-sm mb-2" 
-                           placeholder="Параметр 1" id="debug-param1">
-                    <input type="number" class="form-control form-control-sm mb-2" 
-                           placeholder="Параметр 2" id="debug-param2">
+                    <input type="text" class="form-control form-control-sm mb-2" placeholder="Параметр 1"
+                        id="debug-param1">
+                    <input type="number" class="form-control form-control-sm mb-2" placeholder="Параметр 2"
+                        id="debug-param2">
                     <select class="form-select form-select-sm" id="debug-select">
                         <option value="">Выберите опцию</option>
                         <option value="option1">Опция 1</option>
@@ -64,8 +64,8 @@
                 <!-- Логи -->
                 <div class="mt-3">
                     <label class="form-label small fw-semibold">Логи:</label>
-                    <div id="debug-logs" class="bg-dark text-white p-2 small" 
-                         style="height: 150px; overflow-y: auto; font-family: monospace;">
+                    <div id="debug-logs" class="bg-dark text-white p-2 small"
+                        style="height: 150px; overflow-y: auto; font-family: monospace;">
                         <!-- Логи будут здесь -->
                     </div>
                 </div>
@@ -74,8 +74,8 @@
     </div>
 
     <!-- Кнопка скрытия/показа -->
-    <button class="btn btn-secondary position-absolute" id="debug-toggle-btn" 
-            style="top: 10px; left: 10px; z-index: 1001; padding: 5px 8px;">
+    <button class="btn btn-secondary position-absolute" id="debug-toggle-btn"
+        style="top: 10px; left: 10px; z-index: 1001; padding: 5px 8px;">
         ◀
     </button>
 
@@ -126,46 +126,50 @@
     </div>
 </div>
 
-<div id="route-time-slider-container" class="position-fixed d-none" style="bottom: 15px; left: 50%; transform: translateX(-50%); z-index: 1002; background: rgba(255, 255, 255, 0.88); padding: 12px 18px; border-radius: 20px; box-shadow: 0 4px 25px rgba(0,0,0,0.18); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.4); min-width: 600px; max-width: 80vw;">
-    
+<div id="route-time-slider-container" class="position-fixed d-none"
+    style="bottom: 15px; left: 50%; transform: translateX(-50%); z-index: 1002; background: rgba(255, 255, 255, 0.88); padding: 12px 18px; border-radius: 20px; box-shadow: 0 4px 25px rgba(0,0,0,0.18); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.4); min-width: 600px; max-width: 80vw;">
+
     <!-- Ползунок времени - ПЕРВАЯ СТРОКА -->
     <div class="mb-2">
-        <input type="range" class="form-range" id="route-time-slider" min="0" max="1000" value="0" step="1" style="width: 100%;">
+        <input type="range" class="form-range" id="route-time-slider" min="0" max="1000" value="0" step="1"
+            style="width: 100%;">
     </div>
-    
+
     <!-- ПЕРВАЯ СТРОКА: время начала, текущее время и время конца -->
     <div class="d-flex align-items-center justify-content-between mb-2 mobile-time-row">
         <!-- Время начала -->
         <div class="text-muted fw-medium mobile-time-text" style="opacity: 0.9;">
             <span id="route-time-start">00:00:00</span>
         </div>
-        
+
         <!-- Текущее время -->
-        <div class="bg-light rounded-2 px-2 py-1 mobile-current-time" style="background: rgba(248, 249, 250, 0.9) !important; border: 1px solid rgba(0,0,0,0.08);">
+        <div class="bg-light rounded-2 px-2 py-1 mobile-current-time"
+            style="background: rgba(248, 249, 250, 0.9) !important; border: 1px solid rgba(0,0,0,0.08);">
             <span id="route-time-current" class="fw-bold text-dark">
                 00:00:00
             </span>
         </div>
-        
+
         <!-- Время конца -->
         <div class="text-muted fw-medium mobile-time-text text-end" style="opacity: 0.9;">
             <span id="route-time-end">00:00:00</span>
         </div>
     </div>
-    
+
     <!-- ВТОРАЯ СТРОКА: кнопки управления -->
     <div class="d-flex align-items-center justify-content-center mobile-controls-row">
         <!-- Кнопка перемотки назад -->
         <button class="btn btn-outline-secondary btn-sm mobile-control-btn" id="route-time-prev" style="opacity: 0.9;">
             ◀
         </button>
-        
+
         <!-- Кнопка пуск/пауза -->
-        <button class="btn btn-success rounded-circle d-flex align-items-center justify-content-center mx-2 mobile-play-btn" 
-                id="route-time-play" style="opacity: 0.95;">
+        <button
+            class="btn btn-success rounded-circle d-flex align-items-center justify-content-center mx-2 mobile-play-btn"
+            id="route-time-play" style="opacity: 0.95;">
             <span style="font-size: 0.85em; margin-left: 1px;">▶</span>
         </button>
-        
+
         <!-- Кнопка перемотки вперед -->
         <button class="btn btn-outline-secondary btn-sm mobile-control-btn" id="route-time-next" style="opacity: 0.9;">
             ▶
@@ -273,7 +277,7 @@
 {% endblock %}
 
 {% block styles %}
-<link href="{{ url_for('client.static',filename='css/main.css') }}" rel="stylesheet" />
+<link href="{{ url_for('web.static',filename='components/main_page/styles.css') }}" rel="stylesheet" />
 <style>
 
 </style>
@@ -283,24 +287,30 @@
 {% block scripts %}
 
 <!-- подключение скрипта карты leaflet -->
-<script type="text/javascript" src="{{ url_for('client.static', filename='js/pages/main-page/map-manager.js') }}"></script>
+<script type="text/javascript"
+    src="{{ url_for('web.static', filename='components/map_component/map-manager.js') }}"></script>
 
 <!-- подключение скрипта таблицы пользователей -->
-<script type="text/javascript" src="{{ url_for('client.static', filename='js/pages/main-page/table-manager.js') }}"></script>
+<script type="text/javascript"
+    src="{{ url_for('web.static', filename='components/table_component/table-manager.js') }}"></script>
 
 <!-- подключение скрипта иницилизации списка сессий -->
-<script type="text/javascript" src="{{ url_for('client.static', filename='js/pages/main-page/session-list.js') }}"></script>
+<script type="text/javascript"
+    src="{{ url_for('web.static', filename='components/session_manager/session-list.js') }}"></script>
 
 <!-- подключение скрипта иницилизации модального окна сессий -->
-<script type="text/javascript" src="{{ url_for('client.static', filename='js/pages/main-page/modal-window.js') }}"></script>
+<script type="text/javascript"
+    src="{{ url_for('web.static', filename='components/session_manager/modal-window.js') }}"></script>
 
 <!-- подключение скрипта иницилизации главной страницы -->
-<script type="text/javascript" src="{{ url_for('client.static', filename='js/pages/main-page/index-main.js') }}"></script>
+<script type="text/javascript" src="{{ url_for('web.static', filename='components/main_page/scripts.js') }}"></script>
 
 <!-- подключение скрипта иницилизации панели отладки -->
-<script type="text/javascript" src="{{ url_for('client.static', filename='js/pages/main-page/debug-panel.js') }}"></script>
+<script type="text/javascript"
+    src="{{ url_for('web.static', filename='components/debug_panel/debug-panel.js') }}"></script>
 
 <!-- подключение скрипта ползунка маршрута по времени-->
-<script type="text/javascript" src="{{ url_for('client.static', filename='js/pages/main-page/time-range-slider.js') }}"></script>
+<script type="text/javascript"
+    src="{{ url_for('web.static', filename='components/time_slider/time-range-slider.js') }}"></script>
 
 {% endblock %}

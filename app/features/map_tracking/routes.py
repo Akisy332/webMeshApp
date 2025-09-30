@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 import json
-from app.models.database import DatabaseManager
+from app.shared.database.models import DatabaseManager
 # from app.models.right import Right
 # from app.api.map.services import (
 #     validate_request_data,

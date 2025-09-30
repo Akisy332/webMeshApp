@@ -1,5 +1,5 @@
 from app.core.socketio import socketio
-# from app.models.database import Message
+# from shared.database.models import Message
 
 # @socketio.on('send_message')
 # def handle_message(data):

@@ -1,21 +1,17 @@
 from flask_socketio import SocketIO
 
-socketio = SocketIO(cors_allowed_origins="*",
-                    ping_interval=25,
-                    ping_timeout=5,
-                    logger=True,            # Логирование Socket.IO
-                    engineio_logger=True,   # Детальные логи Engine.IO
-                    debug=True,             # Режим отладки Flask
-                    )
+socketio = SocketIO(cors_allowed_origins="*", ping_interval=25, ping_timeout=5)
 
 def init_socketio(app):
-    """Инициализация Socket.IO с приложением"""
     socketio.init_app(app)
     register_handlers()
 
 def register_handlers():
-    """Динамическая регистрация обработчиков"""
-    from app.api.websockets import map, table, services  # Импорт после инициализации
+    """Явная регистрация WebSocket обработчиков"""
+    # Импортируем ВНУТРИ функции чтобы избежать циклических импортов
+    from app.features.realtime.websockets import add_random_point, send_new_module_data
+    # from app.features.realtime.table_websockets import handle_message  # если есть
     
-    # Альтернативно: автоматический поиск обработчиков
-    # через сканирование директории api/websockets/
+    # Обработчики уже задекорированы @socketio.on в исходных файлах
+    # При импорте они автоматически регистрируются
+    print("✅ WebSocket handlers registered")

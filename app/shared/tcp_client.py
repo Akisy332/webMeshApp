@@ -3,8 +3,8 @@ import uuid
 import socket
 import time
 from pathlib import Path
-from app.models.database import DatabaseManager
-from app.api.websockets.services import send_new_module_data
+from app.shared.database.models import DatabaseManager
+from app.features.realtime.websockets import send_new_module_data
 
 class TCPClientWorker:
     def __init__(self, 

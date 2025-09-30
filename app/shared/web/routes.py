@@ -7,17 +7,17 @@ from flask import (
 
 # from app.models.right import Right
 
-from app.models.database import DatabaseManager
+from app.shared.database.models import DatabaseManager
 
 from flask_jwt_extended import jwt_required
 from flask_jwt_extended import get_jwt
 
 client = Blueprint(
-    "client",
+    "web",
     __name__,
-    static_url_path="/client/static/",
-    static_folder="static",
-    template_folder="templates",
+    static_url_path="/static/",
+    static_folder="",
+    template_folder="",
 )
 
 
@@ -28,12 +28,12 @@ def main_page():
     :return:
     """
     
-    response = make_response(render_template("client/index.html"))
+    response = make_response(render_template("components/main_page/template.html"))
     return response
 
 @client.route('/table')
 def show_table():
-    return render_template('client/data_table.html')
+    return render_template('components/database_viewer/template.html')
 
 @client.route('/initTableMap')
 def initTableMap():

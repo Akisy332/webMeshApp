@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any, Tuple, Union
 from contextlib import contextmanager
 import logging
-from app import db_executor
+from app.core.database import db_executor
 import random
 
 def init_tables():
@@ -727,7 +727,7 @@ class DatabaseManager:
                 'message': "Данные модуля успешно добавлены"
             }
 
-            from app.api.websockets.services import send_new_module_data
+            from app.features.realtime.websockets import send_new_module_data
             send_new_module_data(result)
 
             return result
@@ -739,3 +739,4 @@ class DatabaseManager:
                 'message': error_message,
                 'module_id': 0xFFFF
             }
+            

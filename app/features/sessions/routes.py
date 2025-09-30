@@ -1,10 +1,10 @@
 from flask import Blueprint, request, jsonify
 import json
-from app.models.database import DatabaseManager
+from app.shared.database.models import DatabaseManager
 from flask_socketio import SocketIO, emit
 import uuid
 from datetime import datetime
-from app.api.http.sessions.services import parseDate
+from app.features.sessions.services import parseDate
 from app.core.socketio import socketio
 from flask_jwt_extended import jwt_required, get_jwt
 

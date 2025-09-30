@@ -1,83 +1,36 @@
 import os
 from flask import Flask
+from app.core.config import UPLOAD_FOLDER, DATABASE_PATH
+
 
 # Иницилизация приложения
 app = Flask(__name__, static_folder=None)
 app.config['TODO'] = "todo"
-UPLOAD_FOLDER = 'uploads'
-DATABASE_PATH = "./database.db"
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-
-from app.models.database_executor import SQLiteExecutor
-db_executor = SQLiteExecutor(DATABASE_PATH)
-from app.models.database import init_tables
+# Инициализация БД
+from app.core.database import db_executor
+from app.shared.database.models import init_tables
 init_tables()
 
-from app.core.socketio import init_socketio
 # Инициализация Socket.IO
+from app.core.socketio import init_socketio
 init_socketio(app)
 
+# Регистрация фич
+from app.features.map_tracking import init_map_tracking
+from app.features.data_management import init_data_management  
+from app.features.sessions import init_sessions
 
+init_map_tracking(app)
+init_data_management(app)
+init_sessions(app)
 
-##### Клиентские blueprints #####
-
-########### client ###############
-
-# здесь находится client main html
-from app.client.views import client
-
+# Регистрация клиентских routes
+from app.shared.web.routes import client
 app.register_blueprint(client)
 
-########### client ###############
-#
-#
-#
-############# api ################
-
-##### Серверные blueprints #####
-
-# Import the application views
-# from app import views
-
-# # здесь будет api/auth системы
-# from app.api.auth.views import auth
-
-# app.register_blueprint(auth)
-
-# # здесь будет api/menu системы
-# from app.api.menu.views import menu
-
-# app.register_blueprint(menu)
-
-# здесь будет api/order системы
-from app.api.http.database.views import database
-
-app.register_blueprint(database)
-
-# здесь будет api/order системы
-from app.api.http.sessions.views import sessions
-
-app.register_blueprint(sessions)
-
-# здесь будет api/storage системы
-from app.api.http.map.views import map
-
-app.register_blueprint(map)
-
-# # здесь будет api/user системы
-# from app.api.user.views import user
-
-# app.register_blueprint(user)
-
-# # здесь будет api/push системы
-# from app.api.push.views import push
-
-# app.register_blueprint(push)
-
-############# api ################
-
+# TCP Client
 def handle_raw_data(data):
     print(f"Received data from: {data}")
 
@@ -87,14 +40,13 @@ def handle_error(message):
 def handle_status(message):
     print(f"Status from: {message}")
 
-from app.models.serverHandler import TCPClientWorker
+from app.shared.tcp_client import TCPClientWorker
 worker = TCPClientWorker(
     on_raw_data_received=handle_raw_data,
     on_connection_error=handle_error,
     on_status_message=handle_status
 )
 
-# Запуск в отдельном потоке
 import threading
 thread = threading.Thread(target=worker.run)
 thread.daemon = True

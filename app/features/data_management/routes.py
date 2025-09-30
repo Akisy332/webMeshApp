@@ -1,14 +1,14 @@
 from flask import Blueprint, render_template, jsonify, request, redirect, url_for, current_app
 from werkzeug.utils import secure_filename
-from app.api.http.database.services import allowed_file
-from app.models.database import DatabaseManager
+from app.features.data_management.services import allowed_file
+from app.shared.database.models import DatabaseManager
 import os
 
 database = Blueprint('database', __name__)
 
 @database.route('/database')
 def index():
-    return render_template('client/database.html')
+    return render_template('components/database_viewer/template.html')
 
 @database.route('/api/database/data')
 def get_data():

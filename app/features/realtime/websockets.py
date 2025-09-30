@@ -1,5 +1,5 @@
 from app.core.socketio import socketio
-from app.models.database import DatabaseManager
+from app.shared.database.models import DatabaseManager
 
 def send_new_module_data(data):
     try:
