@@ -21,10 +21,12 @@ init_socketio(app)
 from app.features.map_tracking import init_map_tracking
 from app.features.data_management import init_data_management  
 from app.features.sessions import init_sessions
+from app.features.telemetry_data_table import init_telemetry_data_table
 
 init_map_tracking(app)
 init_data_management(app)
 init_sessions(app)
+init_telemetry_data_table(app)
 
 # Регистрация клиентских routes
 from app.shared.web.routes import client

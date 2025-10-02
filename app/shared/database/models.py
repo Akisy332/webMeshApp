@@ -602,35 +602,129 @@ class DatabaseManager:
             ORDER BY d.datetime DESC
             LIMIT ?
             """,
-            params=(limit,),
-            fetch=True
-        )
+                params=(limit,),
+                fetch=True
+            )
 
-    def get_session_data(self, session_id: int) -> List[Dict[str, Any]]:
-        """Получение данных по конкретной сессии"""
-        # First check if session is hidden
-        session = self.db.execute(
-            "SELECT hidden FROM sessions WHERE id = ?",
-            params=(session_id,),
-            fetch=True
-        )
-
-        if not session or session[0].get('hidden', 0) == 1:
-            return []
-
-        return self.db.execute(
+    def get_session_data(self, session_id: int, module_ids: List[int], limit: int, offset: int) -> Tuple[List[Dict], int]:
+        """
+        Получение данных сессии для указанных модулей с пагинацией
+    
+        :param session_id: ID сессии
+        :param module_ids: список ID модулей, пустой список - все модули
+        :param limit: количество записей на странице
+        :param offset: смещение для пагинации
+        :return: кортеж (данные, общее количество записей в сессии)
+        """
+        # Проверка скрытой сессии
+        check_session_query = "SELECT hidden FROM sessions WHERE id = ?"
+        session_result = self.db.execute(check_session_query, (session_id,), fetch=True)
+    
+        if not session_result:
+            raise ValueError(f"Сессия с ID {session_id} не найдена")
+    
+        if session_result[0]['hidden'] == 1:
+            raise ValueError(f"Сессия с ID {session_id} скрыта")
+    
+        # Создаем плейсхолдеры для модулей
+        if module_ids:
+            placeholders = ','.join(['?'] * len(module_ids))
+            module_condition = f"AND id_module IN ({placeholders})"
+    
+            # Получаем данные только для выбранных модулей с последовательной нумерацией ТОЛЬКО этих записей
+            data_query = f"""
+            WITH filtered_data AS (
+                SELECT 
+                    d.id as data_id,
+                    d.id_session,
+                    d.datetime,
+                    d.datetime_unix,
+                    d.lat,
+                    d.lon,
+                    d.alt,
+                    d.gps_ok,
+                    d.message_number,
+                    d.rssi,
+                    d.snr,
+                    d.source,
+                    d.jumps,
+                    m.id as module_id,
+                    m.name as module_name,
+                    m.color as module_color,
+                    mt.id as message_type_id,
+                    mt.type as message_type_name
+                FROM data d
+                LEFT JOIN module m ON d.id_module = m.id
+                LEFT JOIN message_type mt ON d.id_message_type = mt.id
+                WHERE d.id_session = ? AND d.id_module IN ({placeholders})
+                ORDER BY d.id ASC
+            ),
+            numbered_data AS (
+                SELECT 
+                    *,
+                    ROW_NUMBER() OVER (ORDER BY data_id) as id
+                FROM filtered_data
+            )
+            SELECT * FROM numbered_data
+            LIMIT ? OFFSET ?;
             """
-            SELECT d.id, m.name as module_name, mt.type as message_type, 
-                   d.datetime, d.datetime_unix, d.lat, d.lon, d.alt, d.gps_ok, d.message_number
+    
+            data_params = [session_id] + module_ids + [limit, offset]
+            data = self.db.execute(data_query, data_params, fetch=True)
+    
+            # Получаем общее количество записей в сессии (все модули)
+            total_count_query = "SELECT COUNT(*) as total FROM data WHERE id_session = ?"
+            total_count_result = self.db.execute(total_count_query, (session_id,), fetch=True)
+            total_count = total_count_result[0]['total'] if total_count_result else 0
+    
+            # Получаем количество записей для выбранных модулей в сессии
+            modules_count_query = f"SELECT COUNT(*) as modules_total FROM data WHERE id_session = ? AND id_module IN ({placeholders})"
+            modules_count_params = [session_id] + module_ids
+            modules_count_result = self.db.execute(modules_count_query, modules_count_params, fetch=True)
+            modules_count = modules_count_result[0]['modules_total'] if modules_count_result else 0
+    
+        else:
+            # Запрос без фильтрации по модулям - все данные
+            data_query = """
+            SELECT 
+                d.id as data_id,
+                d.id_session,
+                d.datetime,
+                d.datetime_unix,
+                d.lat,
+                d.lon,
+                d.alt,
+                d.gps_ok,
+                d.message_number,
+                d.rssi,
+                d.snr,
+                d.source,
+                d.jumps,
+                m.id as module_id,
+                m.name as module_name,
+                m.color as module_color,
+                mt.id as message_type_id,
+                mt.type as message_type_name,
+                ROW_NUMBER() OVER (ORDER BY d.id) as id
             FROM data d
-            JOIN module m ON d.id_module = m.id
-            JOIN message_type mt ON d.id_message_type = mt.id
+            LEFT JOIN module m ON d.id_module = m.id
+            LEFT JOIN message_type mt ON d.id_message_type = mt.id
             WHERE d.id_session = ?
-            ORDER BY d.datetime DESC
-            """,
-            params=(session_id,),
-            fetch=True
-        )
+            ORDER BY d.id ASC
+            LIMIT ? OFFSET ?;
+            """
+    
+            data_params = [session_id, limit, offset]
+            data = self.db.execute(data_query, data_params, fetch=True)
+    
+            # Получаем общее количество записей
+            total_count_query = "SELECT COUNT(*) as total FROM data WHERE id_session = ?"
+            total_count_result = self.db.execute(total_count_query, (session_id,), fetch=True)
+            total_count = total_count_result[0]['total'] if total_count_result else 0
+            modules_count = total_count  # Для случая без фильтрации modules_count = total_count
+    
+        return data, total_count, modules_count
+
 
     def add_random_ffff_module_data(self):
         """

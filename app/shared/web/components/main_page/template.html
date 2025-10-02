@@ -1,6 +1,15 @@
 {% extends "base/base.html" %}
 
 {% block body %}
+
+<!-- Скрывающаяся панель с таблицей -->
+<div class="slide-panel" id="slidePanel">
+    <div class="panel-content">
+        <!-- Здесь будет загружена таблица через Blueprint -->
+        <div id="table-content"></div>
+    </div>
+</div>
+
 <div class="container-fluid vh-100 d-flex p-0 position-relative">
     <!-- Панель отладки слева - с абсолютным позиционированием -->
     <div class="position-absolute h-100" id="debug-panel-container" style="z-index: 1000;">
@@ -59,6 +68,9 @@
                             Показать временной ползунок
                         </label>
                     </div>
+                    <button class="btn btn-primary toggle-panel-btn" id="togglePanel">
+                        <i class="form-check-label small"></i> Открыть таблицу
+                    </button>
                 </div>
 
                 <!-- Логи -->
@@ -274,10 +286,15 @@
         </div>
     </div>
 </div>
+
 {% endblock %}
 
 {% block styles %}
+
 <link href="{{ url_for('web.static',filename='components/main_page/styles.css') }}" rel="stylesheet" />
+<link href="{{ url_for('web.static',filename='components/slide_panel/slide-panel.css') }}" rel="stylesheet" />
+
+
 <style>
 
 </style>
@@ -313,4 +330,6 @@
 <script type="text/javascript"
     src="{{ url_for('web.static', filename='components/time_slider/time-range-slider.js') }}"></script>
 
+<script type="text/javascript"
+    src="{{ url_for('web.static', filename='components/slide_panel/slide-panel.js') }}"></script>
 {% endblock %}

@@ -5,8 +5,6 @@ from flask import (
     render_template,
 )
 
-# from app.models.right import Right
-
 from app.shared.database.models import DatabaseManager
 
 from flask_jwt_extended import jwt_required
@@ -20,7 +18,6 @@ client = Blueprint(
     template_folder="",
 )
 
-
 @client.route("/")
 def main_page():
     """
@@ -31,9 +28,9 @@ def main_page():
     response = make_response(render_template("components/main_page/template.html"))
     return response
 
-@client.route('/table')
-def show_table():
-    return render_template('components/database_viewer/template.html')
+# @client.route('/table')
+# def show_table():
+#     return render_template('components/database_viewer/template.html')
 
 @client.route('/initTableMap')
 def initTableMap():

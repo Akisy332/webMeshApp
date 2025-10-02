@@ -7,4 +7,4 @@ from app.core.socketio import socketio
 if __name__ == "__main__":
     port = 8080
     # host = 
-    socketio.run(app, port=port, debug=False)
+    socketio.run(app, port=port, debug=True)
