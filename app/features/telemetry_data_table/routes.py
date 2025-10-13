@@ -81,6 +81,11 @@ def get_users():
         
         if offset < 0 or limit <= 0 or limit > 500:
             return jsonify({'error': 'Invalid parameters'}), 400
+        
+        if direction == 'up':
+            offset = offset - int((limit))
+            if offset < 0:
+                offset = 0
                 
         db_manager = DatabaseManager()
         
@@ -125,10 +130,75 @@ def get_users():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500                
 
+@table_api.route('/api/table/users/datetime')
+def get_users_datetime():
+    """API endpoint для получения данных вокруг указанного datetime_unix"""
+    try:         
+        session_id = int(request.args.get('session_id', 0))
+        modules_str = request.args.get('modules', '')
+        limit = int(request.args.get('limit', 100))
+        datetime_unix = int(request.args.get('datetime', 0))
+        direction = request.args.get('direction', 'down')
+        
+        # Преобразуем строку в список integers
+        if modules_str:
+            module_ids = [int(x.strip()) for x in modules_str.split(',') if x.strip()]
+        else:
+            module_ids = []
+        
+        if datetime_unix <= 0 or limit <= 0 or limit > 500:
+            return jsonify({'error': 'Invalid parameters'}), 400
+                
+        db_manager = DatabaseManager()
+        
+        data, total_count, modules_count, position = db_manager.get_session_data_centered_on_time(
+            session_id=session_id,
+            module_ids=module_ids,
+            limit=limit,
+            target_datetime_unix=datetime_unix
+        )         
+        
+        if direction == 'up':
+            has_more = (datetime_unix + limit) < total_count
+        else:
+            has_more = (datetime_unix + limit) > 1
+            
+        print({
+            'success': True,
+            'total_count': total_count,
+            'session_id': session_id,
+            'has_more': has_more,
+            'direction': direction,
+            'limit': limit,
+            'datetime_unix': datetime_unix,
+            'total_visible_count': modules_count,
+            'target_id': position,
+        })
+        
+        return jsonify({
+            'success': True,
+            'data': data,
+            'total_count': total_count,
+            'session_id': session_id,
+            'has_more': has_more,
+            'direction': direction,
+            'limit': limit,
+            'datetime_unix': datetime_unix,
+            'total_visible_count': modules_count,
+            'target_id': position,
+        })
+
+        
+    except ValueError as e:
+        print(e)
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        print(e)
+        return jsonify({'success': False, 'error': str(e)}), 500            
+
+
 @table_api.route('/table')
 def table_page():
     """Страница с виртуализированной таблицей"""
     return render_template('components/telemetry_data_table/template.html')
-
-
 

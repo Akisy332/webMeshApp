@@ -9,9 +9,9 @@ const tableManager = new TableManager('table-body');
 
 function windowIndexReadyFunc() {
 
-    if (typeof SlidePanel !== 'undefined') {
-        window.slidePanel = new SlidePanel();
-    }
+    // if (typeof SlidePanel !== 'undefined') {
+    //     window.slidePanel = new SlidePanel();
+    // }
 
     // // Загрузка данных
     // fetch('/initTableMap')

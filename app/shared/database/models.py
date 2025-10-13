@@ -725,6 +725,60 @@ class DatabaseManager:
     
         return data, total_count, modules_count
 
+    def get_session_data_centered_on_time(
+            self, 
+            session_id: int, 
+            target_datetime_unix: int,
+            module_ids: List[int] = None, 
+            limit: int = 100
+        ) -> Tuple[List[Dict], int, int]:
+        """
+        Получение данных сессии с центром на первом совпадении указанного времени
+
+        :param session_id: ID сессии
+        :param target_datetime_unix: целевое время (datetime_unix) для центрирования
+        :param module_ids: список ID модулей, None - все модули
+        :param limit: общее количество записей для возврата
+        :return: кортеж (данные, общее количество записей в сессии, количество записей для модулей)
+        """
+       
+        # Определяем смещение для центрирования
+        if module_ids:
+            # Для фильтрованных модулей
+            placeholders = ','.join(['?'] * len(module_ids))
+            position_query = f"""
+            SELECT COUNT(*) as position
+            FROM data 
+            WHERE id_session = ? AND id_module IN ({placeholders}) AND datetime_unix <= ?
+            """
+            position_params = [session_id] + module_ids + [target_datetime_unix]
+        else:
+            # Для всех модулей
+            position_query = """
+            SELECT COUNT(*) as position
+            FROM data 
+            WHERE id_session = ? AND datetime_unix <= ?
+            """
+            position_params = [session_id, target_datetime_unix]
+
+        position_result = self.db.execute(position_query, position_params, fetch=True)
+
+        if not position_result:
+            raise ValueError(f"Не удалось определить позицию для времени {target_datetime_unix}")
+
+        position = position_result[0]['position']
+
+        # Рассчитываем offset для центрирования
+        half_limit = limit // 2
+        offset = max(0, position - half_limit)
+
+        # Используем существующий метод для получения данных
+        data, total_count, modules_count = self.get_session_data(session_id=session_id,
+                                                                 module_ids=module_ids,
+                                                                 limit=limit,
+                                                                 offset=offset)
+        return  data, total_count, modules_count, position
+
 
     def add_random_ffff_module_data(self):
         """

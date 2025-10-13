@@ -3,10 +3,10 @@ class SlidePanel {
         this.panel = document.getElementById('slidePanel');
         this.toggleBtn = document.getElementById('togglePanel');
         this.isOpen = false;
+        this.isTableLoading = false;
         this.isTableLoaded = false;
         this.virtualTable = null;
         this.tableControls = null;
-
         this.init();
     }
 
@@ -31,14 +31,15 @@ class SlidePanel {
         this.isOpen = true;
         this.panel.classList.add('open');
         document.body.style.overflow = 'hidden';
-
-        if (!this.isTableLoaded) {
-            this.loadTable();
-        } else if (this.virtualTable) {
-            // Если таблица уже загружена, обновляем ширину
-            setTimeout(() => {
-                this.virtualTable.updatePanelWidth();
-            }, 50);
+        if (!this.isTableLoading) {
+            if (!this.isTableLoaded) {
+                this.loadTable();
+            } else if (this.virtualTable) {
+                // Если таблица уже загружена, обновляем ширину
+                setTimeout(() => {
+                    this.virtualTable.updatePanelWidth();
+                }, 50);
+            }
         }
     }
 
@@ -49,6 +50,8 @@ class SlidePanel {
     }
 
     async loadTable() {
+        this.isTableLoading = true;
+        console.log("load table");
         const tableContent = document.getElementById('table-content');
 
         if (!this.isTableLoaded) {
@@ -68,7 +71,7 @@ class SlidePanel {
                 const html = await response.text();
                 tableContent.innerHTML = html;
                 this.isTableLoaded = true;
-
+                this.isTableLoading = false;
                 // Инициализируем таблицу после загрузки DOM
                 setTimeout(() => {
                     this.initializeTableAndControls();
@@ -108,11 +111,11 @@ class SlidePanel {
         // Создаем новый экземпляр таблицы
         this.virtualTable = new FixedScrollbarVirtualizedTable('table-container', {
             apiUrl: '/api/table/users',
-            limit: 100,
+            limit: 200,
             rowHeight: 45,
-            buffer: 20,
-            cleanupThreshold: 400,
-            preloadThreshold: 50
+            buffer: 50,
+            cleanupThreshold: 500,
+            preloadThreshold: 100
         });
 
         // Сохраняем ссылку на элемент панели
@@ -372,6 +375,7 @@ function loadTableScript() {
         document.head.appendChild(script);
     });
 }
+
 
 // Инициализация после загрузки скрипта
 loadTableScript()

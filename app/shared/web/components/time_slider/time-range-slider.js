@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const routeTimeEnd = document.getElementById('route-time-end');
     const routeTimePrev = document.getElementById('route-time-prev');
     const routeTimeNext = document.getElementById('route-time-next');
-    const routeTimePlay = document.getElementById('route-time-play'); // Новая кнопка запуска
+    const routeTimePlay = document.getElementById('route-time-play');
 
     // Переменные для анимации
     let animationInterval = null;
@@ -28,11 +28,30 @@ document.addEventListener('DOMContentLoaded', function () {
         eventBus.emit(EventTypes.ROUTE_SLIDER.TIME_SLIDER_CHANGED, currentUnixTime);
     });
 
+    eventBus.on(EventTypes.ROUTE_SLIDER.TIME_SLIDER_SET, unixTime => {
+        setCurrentUnixTime(unixTime);
+    });
+
     // Переменные для хранения границ времени
     let minUnixTime = 0;
     let maxUnixTime = 0;
     let totalSteps = 1000;
     let currentUnixTime = 0; // Сохраняем текущее время отдельно
+
+    // Принудительная установка текущего времени
+    function setCurrentUnixTime(unixTime) {
+
+        newPosition = getSliderPositionFromUnixTime(unixTime);
+        currentUnixTime = unixTime;
+
+        // Устанавливаем позицию слайдера
+        routeTimeSlider.value = newPosition;
+
+        // Обновляем отображение времени
+        updateTimeDisplays();
+        eventBus.emit(EventTypes.ROUTE_SLIDER.TIME_SLIDER_CHANGED, currentUnixTime);
+        addRouteTimeLog(`Текущее время: ${formatUnixTime(currentUnixTime)} (Unix: ${currentUnixTime})`);
+    }
 
     // Функция для добавления логов (если доступна)
     function addRouteTimeLog(message) {
