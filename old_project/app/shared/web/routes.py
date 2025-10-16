@@ -11,7 +11,7 @@ from flask_jwt_extended import jwt_required
 from flask_jwt_extended import get_jwt
 
 client = Blueprint(
-    "web",
+    "frontend",
     __name__,
     static_url_path="/static/",
     static_folder="",

@@ -1,0 +1,61 @@
+version: '3.10'
+
+services:
+  nginx:
+    build: ./nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - api-gateway
+      - websocket-gateway
+    volumes:
+      - ./frontend/app/static:/static
+    networks:
+      - app-network
+
+  api-gateway:
+    build: ./api-gateway
+    environment:
+      FRONTEND_SERVICE_URL: http://frontend:5000/
+    ports:
+      - "8000:8000"
+    depends_on:
+      - frontend
+    networks:
+      - app-network
+
+  websocket-gateway:
+    build: ./websocket-gateway
+    environment:
+      FRONTEND_SERVICE_URL: http://frontend:5000/
+    ports:
+      - "8001:8001"  # Единственный WebSocket endpoint для всего приложения
+    depends_on:
+      - frontend
+    networks:
+      - app-network   
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "5010:5010"
+    environment:
+      WEBSOCKET_GATEWAY_URL: http://websocket-gateway:8001/
+      DATABASE_URL: sqlite:////app/database.db
+      SECRET_KEY: mysecretkey
+    volumes:
+      - ./database.db:/app/database.db # Монтируем конкретный файл
+      - ./frontend/app/static:/app/static
+    networks:
+      - app-network
+    
+
+volumes:
+  database_data:
+
+
+networks:
+  app-network:
+    driver: bridge
