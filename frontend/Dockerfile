@@ -1,22 +1,29 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 WORKDIR /app
+
+# Установка системных зависимостей для PostgreSQL
+RUN apt-get update && apt-get install -y \
+    gcc \
+    python3-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Копирование requirements и установка Python зависимостей
+COPY frontend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY database.db .
+
+# Копирование исходного кода
+COPY frontend/ .
 
 # Копируем общие модули
 COPY shared/ ./shared/
 
-# Копируем requirements frontend сервиса
-COPY frontend/requirements.txt .
-
-RUN pip install -r requirements.txt
-
-COPY frontend/app/static/ ./app/static/
-COPY frontend/app/templates/ ./app/templates/
-
-# Копируем код frontend сервиса
-COPY frontend/ ./
+# Создание необходимых директорий
+RUN mkdir -p uploads
 
 EXPOSE 5000
-EXPOSE 5010
 
 CMD ["python", "run.py"]

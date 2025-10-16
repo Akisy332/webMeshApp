@@ -3,3 +3,5 @@ flask-socketio==5.5.1
 python-socketio==5.13.0
 eventlet==0.33.3
 requests==2.31.0
+python-dotenv==1.0.0
+psycopg2-binary==2.9.7

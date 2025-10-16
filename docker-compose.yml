@@ -16,10 +16,12 @@ services:
   api-gateway:
     build: ./api-gateway
     environment:
-      FRONTEND_SERVICE_URL: http://frontend:5000/
+      - FRONTEND_SERVICE_URL=http://frontend:5000/
+      - POSTGRES_SERVICE_URL=postgresql-service:5432
     ports:
       - "8000:8000"
     depends_on:
+      - postgresql-service
       - frontend
     networks:
       - app-network
@@ -39,21 +41,33 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
-    ports:
-      - "5010:5010"
     environment:
-      WEBSOCKET_GATEWAY_URL: http://websocket-gateway:8001/
-      DATABASE_URL: sqlite:////app/database.db
-      SECRET_KEY: mysecretkey
+      - DATABASE_URL=postgresql://telemetry_user:telemetry_password@postgresql-service:5432/telemetry_db
+      - SECRET_KEY=mysecretkey
+      - TCP_SERVER_HOST=192.168.0.106
+      - TCP_SERVER_PORT=5010
+    depends_on:
+      - postgresql-service
     volumes:
-      - ./database.db:/app/database.db # Монтируем конкретный файл
       - ./frontend/app/static:/app/static
     networks:
       - app-network
     
+  postgresql-service:
+    build: ./postgresql-service
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=telemetry_db
+      - POSTGRES_USER=telemetry_user
+      - POSTGRES_PASSWORD=telemetry_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
 
 volumes:
-  database_data:
+  postgres_data:
 
 
 networks:

@@ -1,10 +1,13 @@
 from flask import render_template, jsonify, make_response, request, redirect, url_for, current_app
 from werkzeug.utils import secure_filename
 from . import app, socketio
-from shared.models import DatabaseManager
+from shared.models_postgres import get_postgres_manager
 import os
 import random
+from datetime import datetime
 
+# Получаем менеджер PostgreSQL
+db_manager = get_postgres_manager()
 
 @app.route('/')
 def main_page():
@@ -33,87 +36,67 @@ def health():
 @app.route('/api/sessions', methods=['GET'])
 def getSessions():
     """Получение списка всех сессий"""
-    db_manager = DatabaseManager()
-    return jsonify(db_manager.get_all_sessions())
-
-from datetime import datetime
-from typing import Dict, Any
-
-def parseDate(data: Dict[str, Any]) -> datetime:
-    """
-    Конвертирует дату и добавляет текущее время.
-    
-    Параметры:
-        data: Словарь, который может содержать ключ 'date' в формате:
-              - строка "YYYY-MM-DD" (например, "2025-07-15")
-              - None (тогда используется текущая дата и время)
-    Возвращает:
-        datetime объект с текущим временем (часы, минуты, секунды).
-    """
-    date_str = data.get("date")
-    
-    if date_str:
-        try:
-            # Парсим дату и добавляем текущее время
-            session_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-            now = datetime.now()
-            datetime_val = datetime.combine(session_date, now.time())
-            print(f"Дата из строки + текущее время: {datetime_val}")
-        except ValueError:
-            # Если формат неверный, используем текущую дату и время
-            datetime_val = datetime.now()
-            print(f"Ошибка формата, используется текущее время: {datetime_val}")
-    else:
-        # Если дата не передана, используем текущую дату и время
-        datetime_val = datetime.now()
-        print(f"Дата не указана, используется текущее время: {datetime_val}")
-    
-    return datetime_val
+    try:
+        sessions = db_manager.get_all_sessions()
+        return jsonify(sessions)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/sessions', methods=['POST'])
 def create_session():
     """Создать новую сессию"""
-    data = request.get_json()
+    try:
+        data = request.get_json()
+        
+        if not data or 'name' not in data:
+            return jsonify({'error': 'Необходимо указать название сессии'}), 400
+        
+        # Используем встроенный метод создания сессии
+        session_id = db_manager._get_or_create_session(None, data['name'], data.get('description', ''))
+        
+        if not session_id:
+            return jsonify({'error': 'Не удалось создать сессию'}), 500
+            
+        # Получаем данные созданной сессии
+        session_data = db_manager._get_session_by_id(session_id)
+        
+        new_session = {
+            'id': session_id,
+            'name': data['name'],
+            'description': data.get('description', ''),
+            'datetime': session_data['datetime'].isoformat() if session_data and session_data.get('datetime') else datetime.now().isoformat()
+        }
+        
+        # Уведомляем всех клиентов через WebSocket о новом списке сессий
+        socketio.emit('session_updated', {'action': 'created', 'session': new_session})
+        
+        return jsonify(new_session), 201
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
     
-    if not data or 'name' not in data:
-        return jsonify({'error': 'Необходимо указать название сессии'}), 400
-    
-    datetime = parseDate(data)
-    
-    db_manager = DatabaseManager()
-    id = db_manager._create_session(data['name'], data.get('description', ''), datetime)
-    
-    new_session = {
-        'id': id,
-        'name': data['name'],
-        'description': data.get('description', ''),
-        'datetime': datetime.isoformat()
-    }
-    
-    # Уведомляем всех клиентов через WebSocket о новом списке сессий
-    socketio.emit('session_updated', {'action': 'created', 'session': new_session})
-    
-    return jsonify(new_session), 201
-
 @app.route('/api/sessions/<int:session_id>/data', methods=['GET'])
 def get_session_data(session_id):
     """Получение данных конкретной сессии"""
-    db_manager = DatabaseManager()
-    return jsonify(db_manager.get_last_message(session_id))
+    try:
+        data = db_manager.get_last_message(session_id)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/sessions/<session_id>', methods=['DELETE'])
 def delete_session(session_id):
     """Удалить сессию"""
-    
-    db_manager = DatabaseManager()
-    if not db_manager.hide_session(session_id):
-        return jsonify({'error': 'Сессия не найдена'}), 404
-    
-    # Уведомляем через WebSocket
-    socketio.emit('session_updated', {'action': 'deleted', 'session_id': session_id})
-    
-    return jsonify({'message': 'Сессия удалена'}), 200
-
+    try:
+        if not db_manager.hide_session(session_id):
+            return jsonify({'error': 'Сессия не найдена'}), 404
+        
+        # Уведомляем через WebSocket
+        socketio.emit('session_updated', {'action': 'deleted', 'session_id': session_id})
+        
+        return jsonify({'message': 'Сессия удалена'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/table/users/search')
 def search_user():
@@ -198,8 +181,6 @@ def get_users():
             if offset < 0:
                 offset = 0
                 
-        db_manager = DatabaseManager()
-        
         data, total_count, modules_count = db_manager.get_session_data(
             session_id=session_id,
             module_ids=module_ids,
@@ -240,7 +221,7 @@ def get_users():
         return jsonify({'success': False, 'error': str(e)}), 400
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500                
-
+    
 @app.route('/api/table/users/datetime')
 def get_users_datetime():
     """API endpoint для получения данных вокруг указанного datetime_unix"""
@@ -260,8 +241,6 @@ def get_users_datetime():
         if datetime_unix <= 0 or limit <= 0 or limit > 500:
             return jsonify({'error': 'Invalid parameters'}), 400
                 
-        db_manager = DatabaseManager()
-        
         data, total_count, modules_count, position = db_manager.get_session_data_centered_on_time(
             session_id=session_id,
             module_ids=module_ids,
@@ -307,7 +286,6 @@ def get_users_datetime():
         print(e)
         return jsonify({'success': False, 'error': str(e)}), 500            
 
-
 @app.route('/api/initTableMap')
 def initTableMap():
     map_config = {
@@ -315,8 +293,7 @@ def initTableMap():
         "lon":  84.9615,
         "zoom": 13
     }
-    database = DatabaseManager()
-    table = database.get_last_message(1)
+    table = db_manager.get_last_message(1)
     data = {
         "table": table,
         "map": map_config
@@ -329,30 +306,24 @@ def get_trace_module():
     id_session = request.args.get('id_session', type=int)
     id_message_type = request.args.get('id_message_type', type=int)
     
-    db_manager = DatabaseManager()
     data = db_manager.get_module_coordinates(int(id_module, 16), id_session, id_message_type)
    
     return jsonify(data)
 
-
-
 @app.route('/api/database/data')
 def get_data():
-    db_manager = DatabaseManager()
     data = db_manager.get_all_data()
-    return jsonify([dict(row) for row in data])
+    return jsonify(data)
 
 @app.route('/api/database/modules')
 def get_modules():
-    db_manager = DatabaseManager()
     modules = db_manager.get_all_modules()
-    return jsonify([dict(row) for row in modules])
+    return jsonify(modules)
 
 @app.route('/api/database/sessions')
 def get_sessions():
-    db_manager = DatabaseManager()
     sessions = db_manager.get_all_sessions()
-    return jsonify([dict(row) for row in sessions])
+    return jsonify(sessions)
 
 @app.route('/api/database/upload', methods=['GET', 'POST'])
 def upload_file():
@@ -363,20 +334,15 @@ def upload_file():
         file = request.files['file']
         session_name = request.form.get('session_name', 'default_session')
         
-
-
-        
         if file.filename == '':
             return redirect(request.url)
-        
         
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
             
-            db_manager = DatabaseManager()
-            session_id = db_manager._create_session(session_name)
+            session_id = db_manager._get_or_create_session(None, session_name)
             try:
                 with open(filepath, 'r') as f:
                     lines = f.readlines()
@@ -386,7 +352,8 @@ def upload_file():
                     for line in lines:
                         line = line.strip()
                         if line:
-                            if db_manager.parse_and_store_data(line, session_id, session_name):
+                            result = db_manager.parse_and_store_data(line, session_id, session_name)
+                            if result:
                                 success_count += 1
                             else:
                                 error_count += 1
@@ -408,12 +375,49 @@ def upload_file():
                 if os.path.exists(filepath):
                     os.remove(filepath)
     
-    return redirect(url_for('database.index'))
-
-DATABASE = 'database.db'
-ALLOWED_EXTENSIONS = {'txt', 'csv'}
-
+    return '''
+    <form method="post" enctype="multipart/form-data">
+        <input type="file" name="file">
+        <input type="text" name="session_name" placeholder="Session name">
+        <input type="submit" value="Upload">
+    </form>
+    '''
 
 def allowed_file(filename):
+    ALLOWED_EXTENSIONS = {'txt', 'csv'}
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+
+@app.route('/api/database/stats')
+def get_database_stats():
+    """Получение статистики базы данных"""
+    try:
+        stats = db_manager.get_database_stats()
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/modules/<int:module_id>/stats')
+def get_module_stats(module_id):
+    """Получение статистики по модулю"""
+    try:
+        session_id = request.args.get('session_id', type=int)
+        stats = db_manager.get_module_statistics(module_id, session_id)
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/search/modules')
+def search_modules():
+    """Поиск модулей"""
+    try:
+        search_term = request.args.get('q', '')
+        if not search_term:
+            return jsonify([])
+        
+        results = db_manager.search_modules(search_term)
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
