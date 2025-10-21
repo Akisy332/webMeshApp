@@ -196,6 +196,7 @@ cython_debug/
 # Test Folder
 test/
 
+postgres_data/
 device_uuid.txt
 secret.txt
 combined_project.txt

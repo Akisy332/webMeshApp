@@ -51,7 +51,7 @@ def migrate_data():
         # 1. Очищаем все таблицы в правильном порядке (чтобы избежать FK violations)
         logger.info("Cleaning existing data...")
         pg_cursor.execute("DELETE FROM data")
-        pg_cursor.execute("DELETE FROM module")
+        pg_cursor.execute("DELETE FROM modules")
         pg_cursor.execute("DELETE FROM sessions")
         
         # 2. Миграция сессий
@@ -105,7 +105,7 @@ def migrate_data():
             
             execute_values(
                 pg_cursor,
-                'INSERT INTO module (id, name, color) VALUES %s',
+                'INSERT INTO modules (id, name, color) VALUES %s',
                 module_data
             )
             logger.info(f"Migrated {len(modules)} modules")
@@ -181,14 +181,14 @@ def verify_migration():
         
         # Проверяем модули
         logger.info("Modules in PostgreSQL:")
-        pg_cursor.execute("SELECT id, name, color FROM module ORDER BY id")
+        pg_cursor.execute("SELECT id, name, color FROM modules ORDER BY id")
         modules = pg_cursor.fetchall()
         for module in modules:
             logger.info(f"  Module {module[0]}: '{module[1]}' with color '{module[2]}'")
         
         # Проверяем количество записей
         tables = {
-            'module': 'SELECT COUNT(*) FROM module',
+            'module': 'SELECT COUNT(*) FROM modules',
             'sessions': 'SELECT COUNT(*) FROM sessions',
             'data': 'SELECT COUNT(*) FROM data'
         }
@@ -202,7 +202,7 @@ def verify_migration():
         pg_cursor.execute("""
             SELECT COUNT(*) as data_count 
             FROM data d 
-            JOIN module m ON d.id_module = m.id 
+            JOIN modules m ON d.id_module = m.id 
             JOIN sessions s ON d.id_session = s.id
         """)
         valid_data_count = pg_cursor.fetchone()[0]

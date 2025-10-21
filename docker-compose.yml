@@ -31,11 +31,11 @@ services:
     environment:
       FRONTEND_SERVICE_URL: http://frontend:5000/
     ports:
-      - "8001:8001"  # Единственный WebSocket endpoint для всего приложения
+      - "8001:8001" # Единственный WebSocket endpoint для всего приложения
     depends_on:
       - frontend
     networks:
-      - app-network   
+      - app-network
 
   frontend:
     build:
@@ -52,7 +52,7 @@ services:
       - ./frontend/app/static:/app/static
     networks:
       - app-network
-    
+
   postgresql-service:
     build: ./postgresql-service
     ports:
@@ -62,13 +62,9 @@ services:
       - POSTGRES_USER=telemetry_user
       - POSTGRES_PASSWORD=telemetry_password
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./postgres_data:/var/lib/postgresql/data
     networks:
       - app-network
-
-volumes:
-  postgres_data:
-
 
 networks:
   app-network:

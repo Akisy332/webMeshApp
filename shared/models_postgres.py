@@ -162,6 +162,11 @@ class PostgreSQLDatabaseManager:
         self.last_session = 0
         self._lock = threading.Lock()
         self.logger = self._setup_logger()
+        
+        tables = self.check_required_tables()
+        if len(tables) != 0:
+            self.init_database()
+    
         self.get_all_sessions()
 
     def _setup_logger(self):
@@ -172,12 +177,58 @@ class PostgreSQLDatabaseManager:
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         return logger
+    
+    def check_tables_exist(self, table_names):
+        """Проверка существования таблиц в БД"""
+        missing_tables = []
+        existing_tables = []
+        
+        try:            
+            # Запрос для проверки существования таблиц
+            query = """
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = ANY(%s)
+            """
+            
+            existing_tables = self.db.execute(query, (table_names,), True)
+            
+            # Находим отсутствующие таблицы
+            missing_tables = [table for table in table_names if table not in existing_tables]
+            
+            
+            self.logger.info(f"Table check: existing={existing_tables}, missing={missing_tables}")
+            
+            return {
+                'all_tables_exist': len(missing_tables) == 0,
+                'existing_tables': existing_tables,
+                'missing_tables': missing_tables,
+                'checked_tables': table_names
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error checking tables: {str(e)}")
+            return {
+                'all_tables_exist': False,
+                'error': str(e),
+                'checked_tables': table_names
+            }
+
+    def check_required_tables(self):
+        """Проверка всех необходимых для приложения таблиц"""
+        required_tables = ['sessions', 'message_type', 'data', 'modules']  # Замените на ваши таблицы
+        
+        return self.check_tables_exist(required_tables)
+
+    
 
     def init_database(self):
+        self.logger.info("Start init DB")
         """Инициализация структуры базы данных"""
         init_queries = [
             """
-            CREATE TABLE IF NOT EXISTS module (
+            CREATE TABLE IF NOT EXISTS modules (
                 id INTEGER PRIMARY KEY,
                 name TEXT,
                 color TEXT
@@ -202,7 +253,7 @@ class PostgreSQLDatabaseManager:
             """
             CREATE TABLE IF NOT EXISTS data (
                 id SERIAL PRIMARY KEY,
-                id_module INTEGER REFERENCES module(id) ON DELETE CASCADE,
+                id_module INTEGER REFERENCES modules(id) ON DELETE CASCADE,
                 id_session INTEGER REFERENCES sessions(id) ON DELETE CASCADE,
                 id_message_type INTEGER REFERENCES message_type(id),
                 datetime TIMESTAMP WITH TIME ZONE,
@@ -485,7 +536,7 @@ class PostgreSQLDatabaseManager:
                     mt.type as message_type,
                     s.name as session_name
                 FROM data d
-                LEFT JOIN module m ON d.id_module = m.id
+                LEFT JOIN modules m ON d.id_module = m.id
                 LEFT JOIN message_type mt ON d.id_message_type = mt.id
                 LEFT JOIN sessions s ON d.id_session = s.id
                 WHERE d.id = %s
@@ -583,7 +634,7 @@ class PostgreSQLDatabaseManager:
                             default_color: Optional[str] = None):
         """Обеспечение существования модуля"""
         exists = self.db.execute(
-            "SELECT 1 FROM module WHERE id = %s",
+            "SELECT 1 FROM modules WHERE id = %s",
             params=(module_id,),
             fetch_one=True
         )
@@ -593,7 +644,7 @@ class PostgreSQLDatabaseManager:
             color = default_color or self._generate_contrasting_color(module_id)
             
             self.db.execute(
-                "INSERT INTO module (id, name, color) VALUES (%s, %s, %s) ON CONFLICT (id) DO NOTHING",
+                "INSERT INTO modules (id, name, color) VALUES (%s, %s, %s) ON CONFLICT (id) DO NOTHING",
                 params=(module_id, name, color)
             )
             logging.info(f"Создан новый модуль: {module_id}")
@@ -641,7 +692,7 @@ class PostgreSQLDatabaseManager:
     def get_all_modules(self) -> List[Dict[str, Any]]:
         """Получение всех модулей"""
         return self.db.execute(
-            "SELECT id, name, color FROM module ORDER BY id",
+            "SELECT id, name, color FROM modules ORDER BY id",
             fetch=True
         ) or []
 
@@ -696,7 +747,7 @@ class PostgreSQLDatabaseManager:
                 d.source,
                 d.jumps
             FROM data d
-            JOIN module m ON d.id_module = m.id
+            JOIN modules m ON d.id_module = m.id
             JOIN sessions s ON d.id_session = s.id AND s.hidden = false
             JOIN message_type mt ON d.id_message_type = mt.id
             ORDER BY d.datetime DESC
@@ -737,7 +788,7 @@ class PostgreSQLDatabaseManager:
 
         # Получаем информацию о модуле
         module_info = self.db.execute(
-            "SELECT color, name FROM module WHERE id = %s",
+            "SELECT color, name FROM modules WHERE id = %s",
             params=(id_module,),
             fetch_one=True
         )
@@ -778,7 +829,7 @@ class PostgreSQLDatabaseManager:
                 m.color as module_color,
                 mt.type as message_type
             FROM data d
-            JOIN module m ON d.id_module = m.id
+            JOIN modules m ON d.id_module = m.id
             JOIN message_type mt ON d.id_message_type = mt.id
             WHERE d.id_session = %s
             AND d.id IN (
@@ -888,7 +939,7 @@ class PostgreSQLDatabaseManager:
                     mt.id as message_type_id,
                     mt.type as message_type_name
                 FROM data d
-                LEFT JOIN module m ON d.id_module = m.id
+                LEFT JOIN modules m ON d.id_module = m.id
                 LEFT JOIN message_type mt ON d.id_message_type = mt.id
                 WHERE d.id_session = %s AND d.id_module IN ({placeholders})
                 ORDER BY d.id ASC
@@ -896,16 +947,14 @@ class PostgreSQLDatabaseManager:
             numbered_data AS (
                 SELECT 
                     *,
-                    ROW_NUMBER() OVER (ORDER BY data_id) as row_num
+                    ROW_NUMBER() OVER (ORDER BY data_id) as id
                 FROM filtered_data
             )
             SELECT * FROM numbered_data
-            WHERE row_num BETWEEN %s AND %s
+            LIMIT %s OFFSET %s
             """
     
-            start_row = offset + 1
-            end_row = offset + limit
-            data_params = [session_id] + module_ids + [start_row, end_row]
+            data_params = [session_id] + module_ids + [limit, offset]
             data = self.db.execute(data_query, data_params, fetch=True) or []
     
             # Получаем общее количество записей
@@ -946,9 +995,9 @@ class PostgreSQLDatabaseManager:
                 m.color as module_color,
                 mt.id as message_type_id,
                 mt.type as message_type_name,
-                ROW_NUMBER() OVER (ORDER BY d.id) as row_num
+                ROW_NUMBER() OVER (ORDER BY d.id) as id
             FROM data d
-            LEFT JOIN module m ON d.id_module = m.id
+            LEFT JOIN modules m ON d.id_module = m.id
             LEFT JOIN message_type mt ON d.id_message_type = mt.id
             WHERE d.id_session = %s
             ORDER BY d.id ASC
@@ -1060,7 +1109,7 @@ class PostgreSQLDatabaseManager:
         return self.db.execute(
             """
             SELECT id, name, color 
-            FROM module 
+            FROM modules 
             WHERE name ILIKE %s OR id::TEXT ILIKE %s
             ORDER BY id
             LIMIT 50
@@ -1085,7 +1134,7 @@ class PostgreSQLDatabaseManager:
                 d.message_number,
                 d.gps_ok
             FROM data d
-            JOIN module m ON d.id_module = m.id
+            JOIN modules m ON d.id_module = m.id
             JOIN sessions s ON d.id_session = s.id
             WHERE d.datetime >= NOW() - INTERVAL '%s hours'
             ORDER BY d.datetime DESC
@@ -1190,7 +1239,7 @@ class PostgreSQLDatabaseManager:
         Получение статистики базы данных
         """
         stats_queries = [
-            ("SELECT COUNT(*) as total_modules FROM module", None),
+            ("SELECT COUNT(*) as total_modules FROM modules", None),
             ("SELECT COUNT(*) as total_sessions FROM sessions WHERE hidden = false", None),
             ("SELECT COUNT(*) as total_data FROM data", None),
             ("SELECT COUNT(*) as gps_data FROM data WHERE gps_ok = true", None),
