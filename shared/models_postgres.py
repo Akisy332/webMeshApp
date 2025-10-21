@@ -195,7 +195,7 @@ class PostgreSQLDatabaseManager:
             existing_tables = self.db.execute(query, (table_names,), True)
             
             # Находим отсутствующие таблицы
-            missing_tables = [table for table in table_names if table not in existing_tables]
+            missing_tables = [table for table in table_names if table not in existing_tables['table_name']]
             
             
             self.logger.info(f"Table check: existing={existing_tables}, missing={missing_tables}")
@@ -1267,5 +1267,5 @@ def get_postgres_manager() -> PostgreSQLDatabaseManager:
     global _postgres_manager
     if _postgres_manager is None:
         _postgres_manager = PostgreSQLDatabaseManager()
-        _postgres_manager.init_database()
+        # _postgres_manager.init_database()
     return _postgres_manager

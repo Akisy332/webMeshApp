@@ -16,13 +16,15 @@ services:
   api-gateway:
     build: ./api-gateway
     environment:
-      - FRONTEND_SERVICE_URL=http://frontend:5000/
-      - POSTGRES_SERVICE_URL=postgresql-service:5432
+      - FRONTEND_SERVICE_URL=http://frontend:5000
+      - AUTH_SERVICE_URL=http://auth-service:8003
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - JWT_ALGORITHM=HS256
     ports:
       - "8000:8000"
     depends_on:
-      - postgresql-service
       - frontend
+      - auth-service
     networks:
       - app-network
 
@@ -34,6 +36,19 @@ services:
       - "8001:8001" # Единственный WebSocket endpoint для всего приложения
     depends_on:
       - frontend
+    networks:
+      - app-network
+
+  postgresql-service:
+    build: ./postgresql-service
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=telemetry_db
+      - POSTGRES_USER=telemetry_user
+      - POSTGRES_PASSWORD=telemetry_password
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
     networks:
       - app-network
 
@@ -53,16 +68,23 @@ services:
     networks:
       - app-network
 
-  postgresql-service:
-    build: ./postgresql-service
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
     ports:
-      - "5432:5432"
+      - "8003:8003"
     environment:
-      - POSTGRES_DB=telemetry_db
-      - POSTGRES_USER=telemetry_user
-      - POSTGRES_PASSWORD=telemetry_password
+      - DATABASE_URL=postgresql://telemetry_user:telemetry_password@postgresql-service:5432/telemetry_db
+      - SECRET_KEY=your-super-secret-key-change-in-production
+      - ACCESS_TOKEN_EXPIRE_MINUTES=15
+      - REFRESH_TOKEN_EXPIRE_DAYS=7
+      - LOG_LEVEL=INFO
+    depends_on:
+      - postgresql-service
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data
+      - ./logs:/app/logs
+    restart: unless-stopped
     networks:
       - app-network
 

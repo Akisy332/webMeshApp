@@ -45,7 +45,7 @@ def check_and_migrate():
             logger.info(f"Migration check failed: {e}")
 
 # Запускаем проверку миграции при старте
-check_and_migrate()
+# check_and_migrate()
 
 # Инициализация маршрутов и WebSocket
 from . import routes, websockets

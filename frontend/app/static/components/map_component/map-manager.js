@@ -674,14 +674,10 @@ class MapManager {
 
     async getTraceModule(id_Module, id_Session, id_Message_Type) {
         try {
-            // Формируем URL с параметрами
-            const url = new URL('/api/map/trace', window.location.origin);
-            url.searchParams.append('id_module', id_Module);
-            url.searchParams.append('id_session', id_Session);
-            url.searchParams.append('id_message_type', id_Message_Type);
+            // Используй относительный URL вместо абсолютного
+            const url = `/api/map/trace?id_module=${id_Module}&id_session=${id_Session}&id_message_type=${id_Message_Type}`;
 
-            // Отправляем GET-запрос
-            const response = await fetch(url.toString(), {
+            const response = await fetch(url, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',

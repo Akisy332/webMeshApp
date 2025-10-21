@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth Service Tester</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 Auth Service Tester</h1>
+            <p>Test all authentication service endpoints</p>
+        </div>
+
+        <div class="user-info">
+            <div id="currentUserInfo">Not logged in</div>
+            <button onclick="fillTestData()" class="btn">Fill Test Data</button>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('authTab')">Authentication</div>
+            <div class="tab" onclick="switchTab('userTab')">User Management</div>
+            <div class="tab" onclick="switchTab('systemTab')">System</div>
+        </div>
+
+        <!-- Admin Management -->
+        <div class="test-section auth-required hidden" id="adminSection">
+            <h2 class="section-title">👑 Admin Management</h2>
+            <div class="form-group">
+                <label for="adminUserId">User ID to manage:</label>
+                <input type="number" id="adminUserId" placeholder="Enter user ID">
+            </div>
+            <button onclick="makeAdmin()" class="btn">Make Admin</button>
+            <button onclick="removeAdmin()" class="btn btn-secondary">Remove Admin</button>
+            <div id="adminResult" class="result"></div>
+        </div>
+
+        <!-- Authentication Tab -->
+        <div id="authTab" class="tab-content active">
+            <!-- Health Check -->
+            <div class="test-section">
+                <h2 class="section-title">🩺 Health Check</h2>
+                <button onclick="checkHealth()" class="btn">Check Service Health</button>
+                <div id="healthResult" class="result"></div>
+            </div>
+
+            <!-- Registration -->
+            <div class="test-section">
+                <h2 class="section-title">📝 Registration</h2>
+                <form id="registerForm" onsubmit="event.preventDefault(); register();">
+                    <div class="form-group">
+                        <label for="regEmail">Email:</label>
+                        <input type="email" id="regEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="regUsername">Username:</label>
+                        <input type="text" id="regUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="regPassword">Password:</label>
+                        <input type="password" id="regPassword" required>
+                    </div>
+                    <button type="submit" class="btn">Register</button>
+                </form>
+                <div id="registerResult" class="result"></div>
+            </div>
+
+            <!-- Login -->
+            <div class="test-section">
+                <h2 class="section-title">🔑 Login</h2>
+                <form id="loginForm" onsubmit="event.preventDefault(); login();">
+                    <div class="form-group">
+                        <label for="loginUsername">Username:</label>
+                        <input type="text" id="loginUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Password:</label>
+                        <input type="password" id="loginPassword" required>
+                    </div>
+                    <button type="submit" class="btn">Login</button>
+                </form>
+                <div id="loginResult" class="result"></div>
+            </div>
+
+            <!-- Token Verification -->
+            <div class="test-section auth-required hidden">
+                <h2 class="section-title">✅ Token Verification</h2>
+                <button onclick="verifyToken()" class="btn">Verify Token</button>
+                <div id="verifyResult" class="result"></div>
+            </div>
+        </div>
+
+        <!-- User Management Tab -->
+        <div id="userTab" class="tab-content">
+            <!-- User Info -->
+            <div class="test-section auth-required hidden">
+                <h2 class="section-title">👤 User Information</h2>
+                <button onclick="getCurrentUser()" class="btn">Get My Info</button>
+                <button onclick="logout()" class="btn btn-secondary">Logout</button>
+                <div id="userInfoResult" class="result"></div>
+            </div>
+
+            <!-- Change Password -->
+            <div class="test-section auth-required hidden">
+                <h2 class="section-title">🔄 Change Password</h2>
+                <form id="passwordForm" onsubmit="event.preventDefault(); changePassword();">
+                    <div class="form-group">
+                        <label for="oldPassword">Old Password:</label>
+                        <input type="password" id="oldPassword" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="newPassword">New Password:</label>
+                        <input type="password" id="newPassword" required>
+                    </div>
+                    <button type="submit" class="btn">Change Password</button>
+                </form>
+                <div id="passwordResult" class="result"></div>
+            </div>
+
+            <!-- Users List (Admin) -->
+            <div class="test-section auth-required hidden">
+                <h2 class="section-title">📋 Users List (Admin)</h2>
+                <button onclick="getUsersList()" class="btn">Get All Users</button>
+                <div id="usersListResult" class="result"></div>
+            </div>
+        </div>
+
+        <!-- System Tab -->
+        <div id="systemTab" class="tab-content">
+            <div class="test-section">
+                <h2 class="section-title">📊 Service Logs</h2>
+                <div class="logs" id="logsContent">Loading logs...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+
+</html>
