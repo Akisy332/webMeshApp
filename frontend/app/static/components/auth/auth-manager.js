@@ -70,7 +70,7 @@ class AuthManager {
 
     async login(username, password) {
         try {
-            const response = await this.apiRequest('/auth/login', 'POST', {
+            const response = await this.apiRequest('/api/auth/login', 'POST', {
                 username,
                 password
             });
@@ -97,7 +97,7 @@ class AuthManager {
 
     async register(email, username, password) {
         try {
-            const response = await this.apiRequest('/auth/register', 'POST', {
+            const response = await this.apiRequest('/api/auth/register', 'POST', {
                 email,
                 username,
                 password
@@ -127,7 +127,7 @@ class AuthManager {
                     throw new Error('No refresh token available');
                 }
 
-                const response = await fetch('/auth/refresh', {
+                const response = await fetch('/api/auth/refresh', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -167,7 +167,7 @@ class AuthManager {
     async logout() {
         try {
             if (this.refreshToken) {
-                await this.apiRequest('/auth/logout', 'POST', {
+                await this.apiRequest('/api/auth/logout', 'POST', {
                     refresh_token: this.refreshToken
                 });
             }
@@ -280,7 +280,7 @@ class AuthManager {
         window.fetch = async (url, options = {}) => {
             // Добавляем токен к запросам к нашему API
             if (typeof url === 'string' &&
-                (url.startsWith('/api/') || url.startsWith('/auth/')) &&
+                (url.startsWith('/api/')) &&
                 this.accessToken) {
 
                 options.headers = {

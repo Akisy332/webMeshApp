@@ -1,93 +1,116 @@
 version: '3.10'
 
 services:
-  nginx:
-    build: ./nginx
+  # ==================== INFRASTRUCTURE ====================
+  traefik:
+    image: traefik:v2.10
+    command:
+      - --configFile=/etc/traefik/traefik.yml
     ports:
       - "80:80"
-    depends_on:
-      - api-gateway
-      - websocket-gateway
+      - "8080:8080"
     volumes:
-      - ./frontend/app/static:/static
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik:/etc/traefik:ro
     networks:
-      - app-network
-
-  api-gateway:
-    build: ./api-gateway
-    environment:
-      - FRONTEND_SERVICE_URL=http://frontend:5000
-      - AUTH_SERVICE_URL=http://auth-service:8003
-      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
-      - JWT_ALGORITHM=HS256
-    ports:
-      - "8000:8000"
-    depends_on:
-      - frontend
-      - auth-service
-    networks:
-      - app-network
-
-  websocket-gateway:
-    build: ./websocket-gateway
-    environment:
-      FRONTEND_SERVICE_URL: http://frontend:5000/
-    ports:
-      - "8001:8001" # Единственный WebSocket endpoint для всего приложения
-    depends_on:
-      - frontend
-    networks:
-      - app-network
+      - webmesh-network
 
   postgresql-service:
-    build: ./postgresql-service
-    ports:
-      - "5432:5432"
+    image: postgres:15
+    container_name: postgresql-service
     environment:
       - POSTGRES_DB=telemetry_db
       - POSTGRES_USER=telemetry_user
       - POSTGRES_PASSWORD=telemetry_password
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     networks:
-      - app-network
+      - webmesh-network
+    labels:
+      - "traefik.enable=false" # База данных не экспонируется через Traefik
 
-  frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    environment:
-      - DATABASE_URL=postgresql://telemetry_user:telemetry_password@postgresql-service:5432/telemetry_db
-      - SECRET_KEY=mysecretkey
-      - TCP_SERVER_HOST=192.168.0.106
-      - TCP_SERVER_PORT=5010
-    depends_on:
-      - postgresql-service
-    volumes:
-      - ./frontend/app/static:/app/static
-    networks:
-      - app-network
-
+  # ==================== SECURITY & AUTH ====================
   auth-service:
     build:
       context: .
       dockerfile: auth-service/Dockerfile
     ports:
-      - "8003:8003"
+      - 8003:8003
+    container_name: auth-service
     environment:
       - DATABASE_URL=postgresql://telemetry_user:telemetry_password@postgresql-service:5432/telemetry_db
-      - SECRET_KEY=your-super-secret-key-change-in-production
-      - ACCESS_TOKEN_EXPIRE_MINUTES=15
-      - REFRESH_TOKEN_EXPIRE_DAYS=7
-      - LOG_LEVEL=INFO
+      - SECRET_KEY=your-jwt-secret-key-change-in-production
+    networks:
+      - webmesh-network
     depends_on:
       - postgresql-service
-    volumes:
-      - ./logs:/app/logs
-    restart: unless-stopped
+    labels:
+      - "traefik.enable=true" # Роутер для /auth/validate - БЕЗ проверки авторизации (чтобы избежать цикла)
+      - "traefik.http.routers.auth-validate.entrypoints=web"
+      - "traefik.http.routers.auth-validate.rule=PathPrefix(`/api/auth`) && Path(`/auth/validate`)"
+      - "traefik.http.routers.auth-validate.service=auth-service"
+      - "traefik.http.routers.auth-validate.middlewares=cors@file"
+
+      # Роутер для ВСЕХ остальных эндпоинтов auth-service - С проверкой авторизации
+      - "traefik.http.routers.auth-main.entrypoints=web"
+      - "traefik.http.routers.auth-main.rule=PathPrefix(`/api/auth`) && !Path(`/auth/validate`)"
+      - "traefik.http.routers.auth-main.service=auth-service"
+      - "traefik.http.routers.auth-main.middlewares=cors@file,auth-forward@file"
+
+      # Сервис для auth-service
+      - "traefik.http.services.auth-service.loadbalancer.server.port=8003"
+
+  # ==================== BUSINESS SERVICES ====================
+  user-service:
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    ports:
+      - 8004:8004
+    container_name: user-service
+    environment:
+      - DATABASE_URL=postgresql://telemetry_user:telemetry_password@postgresql-service:5432/telemetry_db
+      - AUTH_SERVICE_URL=http://auth-service:8003
     networks:
-      - app-network
+      - webmesh-network
+    depends_on:
+      - postgresql-service
+      - auth-service
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.user-service.entrypoints=web"
+      - "traefik.http.routers.user-service.rule=PathPrefix(`/api/user`)"
+      - "traefik.http.services.user-service.loadbalancer.server.port=8004"
+      - "traefik.http.routers.user-service.middlewares=auth-forward@file,cors@file"
+
+  # ==================== FRONTEND & ADMIN ====================
+  frontend-service:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: frontend-service
+    environment:
+      - DATABASE_URL=postgresql://telemetry_user:telemetry_password@postgresql-service:5432/telemetry_db
+      - AUTH_SERVICE_URL=http://auth-service:8003
+      - API_GATEWAY_URL=http://traefik:80
+    networks:
+      - webmesh-network
+    depends_on:
+      - postgresql-service
+      - auth-service
+    labels:
+      - "traefik.enable=true"
+      # Основной роутер для всего фронтенда
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`) && !PathPrefix(`/api/auth`) && !PathPrefix(`/api/user`) && !PathPrefix(`/api/app`) && !PathPrefix(`/api/public`) &&!PathPrefix(`/auth/validate`)"
+      - "traefik.http.routers.frontend.service=frontend"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=5000"
+      # - "traefik.http.routers.frontend.middlewares=auth-forward@file,cors@file"
+
+volumes:
+  postgres_data:
+
 
 networks:
-  app-network:
+  webmesh-network:
     driver: bridge

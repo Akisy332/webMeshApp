@@ -1,6 +1,0 @@
-Flask==2.3.3
-requests==2.31.0
-Flask-SocketIO==5.3.6
-python-socketio==5.8.0
-eventlet==0.33.3
-PyJWT==2.8.0

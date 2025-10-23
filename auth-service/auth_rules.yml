@@ -1,0 +1,60 @@
+# Минимальные права для ролей (иерархия)
+role_minimum_access:
+  public:
+    - path: "/api/auth/login"
+      methods: ["POST"]
+    - path: "/api/auth/register"
+      methods: ["POST"]
+    - path: "/api/auth/logout"
+      methods: ["POST"]
+    - path: "/auth/validate" # для Traefik forwardAuth
+      methods: ["GET"]
+    - path: "/api/auth/validate-token" # публичный для внутренних сервисов
+      methods: ["POST"]
+    - path: "/api/auth/refresh"
+      methods: ["POST"]
+    - path: "/api/auth/health"
+      methods: ["GET"]
+
+    - path: "/api/sessions/public"
+      methods: ["GET"]
+    - path: "/config-status"
+      methods: ["GET"]
+
+    - path: "/api/auth/config-status"
+      methods: ["GET"]
+
+  user:
+    - path: "/api/profile"
+      methods: ["GET", "PUT"]
+    - path: "/api/sessions"
+      methods: ["GET", "POST"]
+    - path: "/api/analytics/basic"
+      methods: ["GET"]
+
+  curator:
+
+
+    - path: "/api/sessions"
+      methods: ["PUT", "DELETE"]  # Дополнительные методы к user правам
+    - path: "/api/content"
+      methods: ["GET", "POST", "PUT"]
+    - path: "/api/analytics/advanced"
+      methods: ["GET"]
+
+  admin:
+
+
+
+    - path: "/api/users"
+      methods: ["GET", "POST", "PUT", "DELETE"]
+    - path: "/api/analytics"
+      methods: ["GET", "POST"]
+    - path: "/api/admin"
+      methods: ["GET", "POST"]
+
+  developer:
+    - path: "/api/system"
+      methods: ["GET", "POST", "PUT", "DELETE"]
+    - path: "/api/debug"
+      methods: ["GET", "POST"]

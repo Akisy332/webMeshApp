@@ -3,12 +3,21 @@ from typing import Optional, List
 from datetime import datetime
 import re
 import logging
+from enum import Enum
 
-logger = logging.getLogger("auth-service")
+logger = logging.getLogger("user-models")
+
+class UserRole(str, Enum):
+    PUBLIC = "public"
+    USER = "user"
+    CURATOR = "curator"
+    ADMIN = "admin"
+    DEVELOPER = "developer"
 
 class UserBase(BaseModel):
     email: EmailStr
     username: str
+    role: UserRole = UserRole.USER
 
     @validator('username')
     def validate_username(cls, v):
@@ -45,47 +54,15 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     username: Optional[str] = None
     is_active: Optional[bool] = None
+    role: Optional[UserRole] = None
 
 class UserResponse(UserBase):
     id: int
     is_active: bool
-    is_superuser: bool
     created_at: datetime
     
     class Config:
         from_attributes = True
 
-class PasswordChange(BaseModel):
-    old_password: str
-    new_password: str
-
-class Token(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str
-    expires_in: int
-    user: UserResponse
-
-class TokenData(BaseModel):
-    username: Optional[str] = None
-
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-class RefreshRequest(BaseModel):
-    refresh_token: str
-
-class LogoutRequest(BaseModel):
-    refresh_token: str
-
-class TokenValidationRequest(BaseModel):
-    token: str
-
-class TokenValidationResponse(BaseModel):
-    valid: bool
-    username: Optional[str] = None
-    user_id: Optional[int] = None
-    email: Optional[str] = None
-    is_superuser: Optional[bool] = None
-    permissions: List[str] = []
+class RoleUpdateRequest(BaseModel):
+    role: UserRole

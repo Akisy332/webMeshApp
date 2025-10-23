@@ -1,101 +1,112 @@
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from typing import Optional, Dict, Any
-import logging
-import hashlib
 import secrets
-from .config import settings
+import hashlib
+import logging
+from app.config import settings
+from shared.permissions import get_permissions_for_role
 
 logger = logging.getLogger("auth-service")
 
-# Используем argon2 вместо bcrypt - он безопаснее и без ограничения длины
-pwd_context = CryptContext(
-    schemes=["argon2", "bcrypt"],
-    deprecated="auto",
-    argon2__time_cost=3,
-    argon2__memory_cost=65536,
-    argon2__parallelism=2,
-    argon2__salt_len=16
-)
+pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Проверка пароля"""
     try:
         return pwd_context.verify(plain_password, hashed_password)
     except Exception as e:
-        logger.error(f"Error verifying password: {str(e)}")
+        logger.error(f"Password verification error: {e}")
         return False
 
 def get_password_hash(password: str) -> str:
     """Хеширование пароля"""
-    try:
-        return pwd_context.hash(password)
-    except Exception as e:
-        logger.error(f"Error hashing password: {str(e)}")
-        raise
+    return pwd_context.hash(password)
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Создание JWT access token"""
+def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
+    """Создание access token с правами"""
     try:
         to_encode = data.copy()
+        
         if expires_delta:
             expire = datetime.utcnow() + expires_delta
         else:
-            expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            expire = datetime.utcnow() + timedelta(minutes=15)
+        
+        # Добавляем права на основе роли
+        role = data.get("role", "user")
+        permissions = [p.value for p in get_permissions_for_role(role)]
         
         to_encode.update({
             "exp": expire,
             "type": "access",
-            "jti": secrets.token_urlsafe(16)  # Unique JWT ID
+            "jti": secrets.token_urlsafe(16),
+            "permissions": permissions
         })
+        
         encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-        logger.info("Access token created successfully")
+        logger.debug(f"Access token created for {data.get('sub')} with role {role}")
         return encoded_jwt
+        
     except Exception as e:
-        logger.error(f"Error creating access token: {str(e)}")
+        logger.error(f"Error creating access token: {e}")
         raise
 
 def create_refresh_token(data: dict) -> str:
-    """Создание JWT refresh token"""
+    """Создание refresh token"""
     try:
         to_encode = data.copy()
-        expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        expire = datetime.utcnow() + timedelta(days=7)
         
-        # Добавляем случайный идентификатор для гарантии уникальности
         to_encode.update({
             "exp": expire,
             "type": "refresh",
-            "jti": secrets.token_urlsafe(32)  # Unique JWT ID для refresh token
+            "jti": secrets.token_urlsafe(32)
         })
+        
         encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-        logger.info("Refresh token created successfully")
+        logger.debug(f"Refresh token created for {data.get('sub')}")
         return encoded_jwt
+        
     except Exception as e:
-        logger.error(f"Error creating refresh token: {str(e)}")
+        logger.error(f"Error creating refresh token: {e}")
         raise
 
-def hash_token(token: str) -> str:
-    """Хеширование токена для безопасного хранения"""
-    return hashlib.sha256(token.encode()).hexdigest()
-
-def verify_token(token: str) -> Optional[dict]:
+def verify_token(token: str) -> dict:
     """Проверка JWT токена"""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         return payload
     except JWTError as e:
-        logger.warning(f"JWT token verification failed: {str(e)}")
+        logger.warning(f"JWT token verification failed: {e}")
         return None
     except Exception as e:
-        logger.error(f"Error verifying token: {str(e)}")
+        logger.error(f"Error verifying token: {e}")
         return None
 
-def extract_token_payload(token: str) -> Optional[Dict[str, Any]]:
-    """Извлечение payload из токена без проверки подписи (для gateway)"""
+def hash_token(token: str) -> str:
+    """Хеширование токена для хранения"""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+def store_refresh_token(db_manager, user_id: int, refresh_token: str) -> bool:
+    """Сохранение refresh token в БД"""
     try:
-        payload = jwt.get_unverified_claims(token)
-        return payload
+        token_hash = hash_token(refresh_token)
+        expires_at = datetime.utcnow() + timedelta(days=7)
+        
+        query = """
+        INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
+        VALUES (%s, %s, %s)
+        """
+        
+        db_manager.db.execute(query, (user_id, token_hash, expires_at))
+        logger.info(f"Refresh token stored for user {user_id}")
+        return True
+        
     except Exception as e:
-        logger.error(f"Error extracting token payload: {str(e)}")
-        return None
+        logger.error(f"Error storing refresh token: {e}")
+        return False
+
+def revoke_refresh_token(token: str) -> str:
+    """Отзыв refresh token"""
+    return hash_token(token)

@@ -20,7 +20,7 @@ class RegisterForm {
             <div class="auth-modal">
                 <div class="auth-header">
                     <h3>Регистрация</h3>
-                    <button class="close-btn">&times;</button>
+                    <button class="close-btn-register">&times;</button>
                 </div>
                 
                 <form id="register-form" class="auth-form">
@@ -95,7 +95,7 @@ class RegisterForm {
 
     bindEvents() {
         // Проверяем все элементы перед добавлением обработчиков
-        const closeBtn = this.container.querySelector('.close-btn');
+        const closeBtn = this.container.querySelector('.close-btn-register');
         const overlay = this.container.querySelector('.register-overlay');
         const form = this.container.querySelector('#register-form');
         const switchLink = this.container.querySelector('.switch-to-login');

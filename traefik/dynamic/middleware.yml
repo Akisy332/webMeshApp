@@ -1,0 +1,27 @@
+http:
+  middlewares:
+    # Forward Auth middleware
+    auth-forward:
+      forwardAuth:
+        address: "http://auth-service:8003/auth/validate"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - "X-User-Id"
+          - "X-User-Name"
+          - "X-User-Role"
+          - "X-User-Permissions"
+          - "X-User-Email"
+
+    # CORS middleware для Traefik v2.10
+    cors:
+      headers:
+        accesscontrolallowmethods: "*"
+        accesscontrolalloworiginlist: "*"
+        accesscontrolmaxage: 100
+        addvaryheader: true
+
+    # Middleware для удаления префикса /api/auth
+    auth-stripprefix:
+      stripPrefix:
+        prefixes:
+          - "/api/auth"

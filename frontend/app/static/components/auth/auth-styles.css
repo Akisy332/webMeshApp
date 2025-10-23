@@ -48,6 +48,7 @@
     font-size: 1.25rem;
 }
 
+.close-btn-register,
 .close-btn {
     background: none;
     border: none;
@@ -62,6 +63,7 @@
     justify-content: center;
 }
 
+.close-btn-register:hover,
 .close-btn:hover {
     color: #333;
     background: #f8f9fa;

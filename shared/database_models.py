@@ -1,9 +1,8 @@
 import logging
-from typing import Optional
 
-logger = logging.getLogger("auth-service")
+logger = logging.getLogger("database-models")
 
-# Определяем структуру таблицы пользователей
+# Структура таблицы пользователей
 USER_TABLE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
@@ -11,7 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(100) UNIQUE NOT NULL,
     hashed_password VARCHAR(255) NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
-    is_superuser BOOLEAN DEFAULT FALSE,
+    role VARCHAR(50) DEFAULT 'user',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 )
@@ -34,7 +33,8 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 USER_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
     "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)",
-    "CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active) WHERE is_active = true"
+    "CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active) WHERE is_active = true",
+    "CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)"
 ]
 
 # Индексы для refresh tokens
