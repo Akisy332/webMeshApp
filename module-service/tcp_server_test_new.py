@@ -10,6 +10,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import json
 import time
+from parser import parse_message, HopData
 
 # Data structures
 message_queue = Queue(maxsize=10000)
@@ -90,21 +91,81 @@ def update_connected_modules():
         if current_time - module.get('last_activity', 0) < 60
     ]
 
+import re
+import binascii
+
+def hex_string_to_bytes(hex_string):
+    """
+    Преобразует строку HEX в байты
+    """
+    # Удаляем все пробелы и не-hex символы
+    cleaned_hex = re.sub(r'[^0-9A-Fa-f]', '', hex_string)
+    
+    # Проверяем четность длины
+    if len(cleaned_hex) % 2 != 0:
+        raise ValueError("Некорректная HEX строка: длина должна быть четной")
+    
+    # Преобразуем HEX в байты
+    try:
+        binary_data = binascii.unhexlify(cleaned_hex)
+        return binary_data
+    except binascii.Error as e:
+        raise ValueError(f"Некорректная HEX строка: {e}")
+
+def is_valid_hex_string(hex_string):
+    """
+    Проверяет, является ли строка валидной HEX строкой
+    """
+    try:
+        hex_string_to_bytes(hex_string)
+        return True
+    except ValueError:
+        return False
+
+def process_hex_input(hex_input):
+    """
+    Основная функция обработки HEX ввода
+    """
+    try:
+        binary_data = hex_string_to_bytes(hex_input)
+        return binary_data
+    except ValueError as e:
+        raise e
+
 def send_to_provider(address, message):
     """Отправляет сообщение поставщику по адресу"""
     try:
         if address in provider_connections:
             conn = provider_connections[address]
             if is_connection_alive(conn):
-                conn.sendall((message + "\n").encode())
                 
-                # Логируем отправку
-                sent_entry = {
-                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-                    'to_address': address,
-                    'message': message,
-                    'direction': 'manual_to_provider'
-                }
+                # Проверяем, является ли сообщение HEX строкой
+                if is_valid_hex_string(message):
+                    # Преобразуем HEX в бинарные данные для отправки
+                    binary_data = hex_string_to_bytes(message)
+                    conn.sendall(binary_data)
+                    
+                    # Логируем отправку в HEX формате
+                    hex_representation = binary_data.hex()
+                    sent_entry = {
+                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
+                        'to_address': address,
+                        'message': hex_representation,
+                        'direction': 'manual_to_provider',
+                        'format': 'hex'
+                    }
+                else:
+                    # Отправляем как обычный текст (для обратной совместимости)
+                    conn.sendall((message + "\n").encode())
+                    
+                    sent_entry = {
+                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
+                        'to_address': address,
+                        'message': message,
+                        'direction': 'manual_to_provider',
+                        'format': 'text'
+                    }
+                
                 sent_messages.append(sent_entry)
                 
                 log_message('INFO', f"Message sent to provider: {message}", f"WEB->{address}")
@@ -123,13 +184,13 @@ def send_to_provider(address, message):
         if address in provider_connections:
             del provider_connections[address]
         return False
-
-def handle_client(conn, address):
+    
+def handle_consumer(conn, address):
+    """Обработчик для потребителей (порт 5002)"""
     client_info = f"{address[0]}:{address[1]}"
-    log_message('INFO', f"New connection", client_info)
+    log_message('INFO', f"New consumer connection", client_info)
     
     client_uuid = None
-    module_type = None
     
     try:
         # Установка таймаута (30 секунд)
@@ -138,14 +199,13 @@ def handle_client(conn, address):
         # Step 1: Receive UUID from client
         data = conn.recv(1024).decode().strip()
         if not data:  # Соединение закрыто сразу
-            log_message('INFO', f"Client disconnected before sending UUID", client_info)
+            log_message('INFO', f"Consumer disconnected before sending UUID", client_info)
             return
             
-        log_message('DEBUG', f"Received data: {data}", client_info)
+        log_message('DEBUG', f"Received data from consumer: {data}", client_info)
         
         if data.startswith("UUID:"):
             # This is a data consumer sending UUID
-            module_type = "consumer"
             client_uuid = data[5:]  # Extract UUID part
             
             # Validate UUID
@@ -164,7 +224,7 @@ def handle_client(conn, address):
             try:
                 conn.sendall(b"UUID_ACCEPTED\n")
             except (ConnectionResetError, BrokenPipeError):
-                log_message('INFO', f"Client disconnected during UUID confirmation", client_info)
+                log_message('INFO', f"Consumer disconnected during UUID confirmation", client_info)
                 return
             
             # Initialize client queue if not exists
@@ -177,6 +237,7 @@ def handle_client(conn, address):
                 'uuid': client_uuid,
                 'address': client_info,
                 'type': 'consumer',
+                'port': 5002,
                 'last_activity': time.time(),
                 'status': 'connected'
             }
@@ -189,9 +250,9 @@ def handle_client(conn, address):
                 try:
                     data = conn.recv(1024).decode().strip()
                     if not data:  # Клиент закрыл соединение
-                        log_message('INFO', f"Client disconnected", f"{client_info} ({client_uuid})")
+                        log_message('INFO', f"Consumer disconnected", f"{client_info} ({client_uuid})")
                         break
-                        
+                    time.sleep(0.5)
                     if data == "GET_DATA":
                         response = get_new_data_for_client(client_uuid)
                         try:
@@ -208,10 +269,10 @@ def handle_client(conn, address):
                                     'direction': 'outgoing'
                                 }
                                 sent_messages.append(sent_entry)
-                                log_message('DEBUG', f"Data sent: {response.strip()}", f"{client_info} ({client_uuid})")
+                                log_message('DEBUG', f"Data sent to consumer: {response.strip()}", f"{client_info} ({client_uuid})")
                                 
                         except (ConnectionResetError, BrokenPipeError, OSError):
-                            log_message('INFO', f"Client disconnected during send", f"{client_info} ({client_uuid})")
+                            log_message('INFO', f"Consumer disconnected during send", f"{client_info} ({client_uuid})")
                             break
                             
                         # Обновляем время активности
@@ -224,7 +285,7 @@ def handle_client(conn, address):
                         try:
                             conn.sendall(b"UNKNOWN_COMMAND\n")
                         except (ConnectionResetError, BrokenPipeError, OSError):
-                            log_message('INFO', f"Client disconnected during send", f"{client_info} ({client_uuid})")
+                            log_message('INFO', f"Consumer disconnected during send", f"{client_info} ({client_uuid})")
                             break
                             
                 except socket.timeout:
@@ -236,61 +297,32 @@ def handle_client(conn, address):
                             break
                     continue
                 except (ConnectionResetError, BrokenPipeError, OSError):
-                    log_message('INFO', f"Connection closed by client", f"{client_info} ({client_uuid})")
+                    log_message('INFO', f"Consumer connection closed by client", f"{client_info} ({client_uuid})")
                     break
                 except Exception as e:
-                    log_message('ERROR', f"Error processing request: {e}", f"{client_info} ({client_uuid})")
+                    log_message('ERROR', f"Error processing consumer request: {e}", f"{client_info} ({client_uuid})")
                     break
                     
-        elif data.startswith(("GL", "GV")):
-            # This is a data provider
-            module_type = "provider"
-            log_message('INFO', f"Data provider module connected", client_info)
-            
-            # Сохраняем соединение с поставщиком
-            provider_connections[client_info] = conn
-            
-            # Добавляем в список подключенных модулей
-            module_info = {
-                'address': client_info,
-                'type': 'provider', 
-                'last_activity': time.time(),
-                'status': 'connected'
-            }
-            connected_modules.append(module_info)
-            
-            handle_data_provider(conn, address, data)
         else:
             try:
                 conn.sendall(b"INVALID_INITIAL_MESSAGE\n")
-                log_message('WARNING', f"Invalid initial message: {data}", client_info)
+                log_message('WARNING', f"Invalid initial message from consumer: {data}", client_info)
             except (ConnectionResetError, BrokenPipeError):
-                log_message('INFO', f"Client disconnected during send", client_info)
+                log_message('INFO', f"Consumer disconnected during send", client_info)
     
     except ConnectionResetError:
-        log_message('WARNING', f"Client disconnected abruptly", client_info)
+        log_message('WARNING', f"Consumer disconnected abruptly", client_info)
     except socket.timeout:
-        log_message('WARNING', f"Timeout waiting for client data", client_info)
+        log_message('WARNING', f"Timeout waiting for consumer data", client_info)
     except Exception as e:
-        log_message('ERROR', f"Error with client: {e}", client_info)  
+        log_message('ERROR', f"Error with consumer: {e}", client_info)  
     finally:
-        log_message('INFO', f"Disconnected: {client_info}", client_info)
+        log_message('INFO', f"Consumer disconnected: {client_info}", client_info)
         
-        # Удаляем из списка подключенных модулей и соединений
-        if module_type == "consumer" and client_uuid:
-            # Для потребителей только меняем статус, не удаляем полностью
+        # Для потребителей только меняем статус, не удаляем полностью
+        if client_uuid:
             for module in connected_modules:
                 if module.get('uuid') == client_uuid:
-                    module['status'] = 'disconnected'
-                    module['last_activity'] = time.time()
-                    break
-        elif module_type == "provider":
-            # Для поставщиков удаляем соединение, но оставляем в списке с статусом disconnected
-            if client_info in provider_connections:
-                del provider_connections[client_info]
-                
-            for module in connected_modules:
-                if module.get('address') == client_info and module.get('type') == 'provider':
                     module['status'] = 'disconnected'
                     module['last_activity'] = time.time()
                     break
@@ -300,11 +332,62 @@ def handle_client(conn, address):
         except:
             pass
 
-def handle_data_provider(conn, address, initial_data):
+def handle_provider(conn, address):
+    """Обработчик для поставщиков (порт 5000)"""
+    client_info = f"{address[0]}:{address[1]}"
+    log_message('INFO', f"New provider connection", client_info)
+    
+    try:
+        # Установка таймаута
+        conn.settimeout(30.0)
+        
+        # Получаем первое сообщение от поставщика
+        data_byte = conn.recv(1024)
+        if not data_byte:  # Соединение закрыто сразу
+            log_message('INFO', f"Provider disconnected immediately", client_info)
+            return
+        
+        if data_byte[0:2] == b'GL':
+            log_message('INFO', f"Data provider module connected", client_info)
+        
+            # Сохраняем соединение с поставщиком
+            provider_connections[client_info] = conn
+        
+            # Добавляем в список подключенных модулей
+            module_info = {
+                'address': client_info,
+                'type': 'provider', 
+                'port': 5000,
+                'last_activity': time.time(),
+                'status': 'connected'
+            }
+            connected_modules.append(module_info)
+
+            # Обрабатываем данные поставщика
+            handle_data_provider(conn, address, data_byte)
+        else:
+            hex_data = data_byte.hex()
+            hex_with_spaces = ' '.join(hex_data[i:i+2] for i in range(0, 20, 2))
+            log_message('WARNING', f"Invalid start packet format. Expected '47 4c 20' at start, got: {hex_with_spaces}...", client_info)
+            
+            with open("invalid_packets.log", "a") as f:
+                f.write(f"[{datetime.now()}] Invalid packet: {hex_data}\n")
+                
+            conn.close()
+        
+    except Exception as e:
+        log_message('ERROR', f"Error initializing provider: {e}", client_info)
+        try:
+            conn.close()
+        except:
+            pass
+
+def handle_data_provider(conn, address, initial_bytes_data):
+    """Обработчик данных от поставщика"""
     client_info = f"{address[0]}:{address[1]}"
     scet = 0
-    data = initial_data
-    
+    data_byte = initial_bytes_data
+
     try:
         # Установка таймаута
         conn.settimeout(30.0)
@@ -313,16 +396,33 @@ def handle_data_provider(conn, address, initial_data):
             time_stamp = datetime.now()
             scet += 1
             
-            if not data:  # Клиент закрыл соединение
-                log_message('INFO', f"Module disconnected properly", client_info)
+            hex_data = data_byte.hex()
+            
+            if not hex_data:  # Клиент закрыл соединение
+                log_message('INFO', f"Provider disconnected properly", client_info)
                 break
-                
-            log_message('INFO', f"Data: {data} time = {time_stamp} packet_num = {scet}", client_info)
+
+            hex_with_spaces = ' '.join(hex_data[i:i+2] for i in range(0, len(hex_data), 2))
+            log_message('INFO', f"Data: {hex_with_spaces} time = {time_stamp} packet_num = {scet}", client_info)
 
             with open("raw_data.txt", "a") as f:
-                f.write(f"{data} time = {time_stamp} packet_num = {scet}\n")
+                f.write(f"{hex_with_spaces} time = {time_stamp} packet_num = {scet}\n")
 
-            save_to_queue(data, time_stamp, scet)
+            # Парсинг
+            hops, errors = parse_message(data_byte)
+            
+            log_message('INFO',f"Successfully parsed {len(hops)} hops")
+            
+            for i, hop in enumerate(hops):
+                log_message('INFO',f"Hop {i}: module={hop.module_num}, lat={hop.lat:.6f}, lng={hop.lng:.6f}, "
+                      f"alt={hop.altitude}, speed={hop.speed}, RoC={hop.roc}")
+            
+            if errors:
+                log_message('INFO',"\nErrors encountered:")
+                for error in errors:
+                    log_message('INFO',f"  - {error}")
+
+            save_to_queue(hex_data, time_stamp, scet)
             
             # Обновляем время активности
             for module in connected_modules:
@@ -332,32 +432,58 @@ def handle_data_provider(conn, address, initial_data):
             
             # Get next data packet
             try:
-                data = conn.recv(1024).decode()
+                data_byte = conn.recv(1024)
+                if not data_byte:  # Соединение закрыто
+                    log_message('INFO', f"Provider disconnected", client_info)
+                    break
+
             except socket.timeout:
-                log_message('WARNING', f"Module connection timeout", client_info)
+                log_message('WARNING', f"Provider connection timeout", client_info)
                 break
             except (ConnectionResetError, BrokenPipeError, OSError):
-                log_message('INFO', f"Module disconnected", client_info)
+                log_message('INFO', f"Provider disconnected", client_info)
                 break
                 
     except ConnectionResetError:
-        log_message('WARNING', f"Module disconnected abruptly", client_info)
+        log_message('WARNING', f"Provider disconnected abruptly", client_info)
     except Exception as e:
-        log_message('ERROR', f"Error with module: {e}", client_info)        
+        log_message('ERROR', f"Error with provider: {e}", client_info)        
     finally:
-        log_message('INFO', f"Disconnected module: {client_info}", client_info)
+        log_message('INFO', f"Provider disconnected: {client_info}", client_info)
+        
+        # Для поставщиков удаляем соединение, но оставляем в списке с статусом disconnected
+        if client_info in provider_connections:
+            del provider_connections[client_info]
+            
+        for module in connected_modules:
+            if module.get('address') == client_info and module.get('type') == 'provider':
+                module['status'] = 'disconnected'
+                module['last_activity'] = time.time()
+                break
+                
         try:
             conn.close()
         except:
             pass
 
 def save_to_queue(message, timestamp, packet_number):
-    message_queue.put((packet_number, message, timestamp))
-    
-    # Update all client queues with this new message
-    for client_uuid in client_queues:
-        client_queues[client_uuid].append((packet_number, message, timestamp))
-        last_packet_sent[client_uuid] = packet_number
+    # Если сообщение пришло в HEX формате (от поставщика), преобразуем его
+    if isinstance(message, bytes):
+        hex_message = message.hex()
+        message_queue.put((packet_number, hex_message, timestamp))
+        
+        # Update all client queues with this new message
+        for client_uuid in client_queues:
+            client_queues[client_uuid].append((packet_number, hex_message, timestamp))
+            last_packet_sent[client_uuid] = packet_number
+    else:
+        # Обычное текстовое сообщение
+        message_queue.put((packet_number, message, timestamp))
+        
+        # Update all client queues with this new message
+        for client_uuid in client_queues:
+            client_queues[client_uuid].append((packet_number, message, timestamp))
+            last_packet_sent[client_uuid] = packet_number
 
 def get_new_data_for_client(client_uuid):
     messages = []
@@ -369,10 +495,10 @@ def get_new_data_for_client(client_uuid):
     # Всегда добавляем \n в конце, даже если сообщение одно
     return "\n".join(messages) + "\n" if messages else "NO_DATA\n"
 
-def server_program():
-    # host = socket.gethostname()
-    host = "192.168.0.106"
-    port = 5010
+def provider_server_program():
+    """Сервер для поставщиков на порту 5000"""
+    host = socket.gethostname()
+    port = 5000
     
     # Создаем socket с опцией REUSEADDR
     server_socket = socket.socket()
@@ -381,27 +507,27 @@ def server_program():
     try:
         server_socket.bind((host, port))
         server_socket.listen()
-        log_message('INFO', f"Server started on {host}:{port}")
+        log_message('INFO', f"Provider server started on {host}:{port}")
         
-        # Список для хранения активных клиентских соединений
-        client_connections = []
+        # Список для хранения активных соединений поставщиков
+        provider_connections_list = []
         
         try:
             while True:
                 conn, address = server_socket.accept()
                 # Добавляем соединение в список
-                client_connections.append(conn)
+                provider_connections_list.append(conn)
 
-                client_thread = threading.Thread(target=handle_client, args=(conn, address))
-                client_thread.daemon = True
-                client_thread.start()
+                provider_thread = threading.Thread(target=handle_provider, args=(conn, address))
+                provider_thread.daemon = True
+                provider_thread.start()
                 
         except KeyboardInterrupt:
-            log_message('INFO', "Server shutting down...")
+            log_message('INFO', "Provider server shutting down...")
             
         finally:
-            # Закрываем все клиентские соединения
-            for conn in client_connections:
+            # Закрываем все соединения поставщиков
+            for conn in provider_connections_list:
                 try:
                     conn.close()
                 except:
@@ -410,7 +536,50 @@ def server_program():
     finally:
         # Гарантируем закрытие серверного сокета
         server_socket.close()
-        log_message('INFO', "Server socket closed and port released")
+        log_message('INFO', "Provider server socket closed and port released")
+
+def consumer_server_program():
+    """Сервер для потребителей на порту 5002"""
+    host = socket.gethostname()
+    port = 5002
+    
+    # Создаем socket с опцией REUSEADDR
+    server_socket = socket.socket()
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    try:
+        server_socket.bind((host, port))
+        server_socket.listen()
+        log_message('INFO', f"Consumer server started on {host}:{port}")
+        
+        # Список для хранения активных соединений потребителей
+        consumer_connections = []
+        
+        try:
+            while True:
+                conn, address = server_socket.accept()
+                # Добавляем соединение в список
+                consumer_connections.append(conn)
+
+                consumer_thread = threading.Thread(target=handle_consumer, args=(conn, address))
+                consumer_thread.daemon = True
+                consumer_thread.start()
+                
+        except KeyboardInterrupt:
+            log_message('INFO', "Consumer server shutting down...")
+            
+        finally:
+            # Закрываем все клиентские соединения
+            for conn in consumer_connections:
+                try:
+                    conn.close()
+                except:
+                    pass
+                
+    finally:
+        # Гарантируем закрытие серверного сокета
+        server_socket.close()
+        log_message('INFO', "Consumer server socket closed and port released")
 
 # Flask routes
 @app.route('/')
@@ -442,6 +611,7 @@ def send_message():
     module_uuid = data.get('uuid')
     module_address = data.get('address')
     message = data.get('message')
+    message_format = data.get('format', 'text')  # 'text' или 'hex'
     
     if not message:
         return jsonify({'status': 'error', 'message': 'Message is required'})
@@ -450,6 +620,10 @@ def send_message():
     if module_uuid and not module_address:
         if module_uuid not in client_queues:
             return jsonify({'status': 'error', 'message': 'Consumer module not found'})
+        
+        # Для HEX сообщений проверяем валидность
+        if message_format == 'hex' and not is_valid_hex_string(message):
+            return jsonify({'status': 'error', 'message': 'Invalid HEX string'})
         
         # Добавляем сообщение в очередь для указанного модуля
         timestamp = datetime.now()
@@ -464,7 +638,8 @@ def send_message():
             'to_uuid': module_uuid,
             'to_address': next((m.get('address') for m in connected_modules if m.get('uuid') == module_uuid), 'unknown'),
             'message': message,
-            'direction': 'manual_to_consumer'
+            'direction': 'manual_to_consumer',
+            'format': message_format
         }
         sent_messages.append(sent_entry)
         
@@ -487,8 +662,15 @@ def send_message():
 def get_server_status():
     """API для получения статуса сервера"""
     active_providers = [addr for addr, conn in provider_connections.items() if is_connection_alive(conn)]
+    
+    # Подсчитываем подключенные модули по типам
+    connected_consumers = len([m for m in connected_modules if m.get('status') == 'connected' and m.get('type') == 'consumer'])
+    connected_providers = len([m for m in connected_modules if m.get('status') == 'connected' and m.get('type') == 'provider'])
+    
     status = {
-        'connected_modules': len([m for m in connected_modules if m.get('status') == 'connected']),
+        'connected_consumers': connected_consumers,
+        'connected_providers': connected_providers,
+        'total_modules': connected_consumers + connected_providers,
         'active_providers': len(active_providers),
         'total_messages': len(all_messages),
         'sent_messages': len(sent_messages),
@@ -545,6 +727,7 @@ if __name__ == '__main__':
         .consumer { background-color: #e8f5e8; }
         .provider { background-color: #e8f0ff; }
         .active-connection { font-weight: bold; }
+        .port-info { font-size: 0.8em; color: #666; }
     </style>
 </head>
 <body>
@@ -571,11 +754,15 @@ if __name__ == '__main__':
             
             <div id="consumerTab" class="tab-content active">
                 <div class="send-form">
-                    <input type="text" id="consumerMessageInput" placeholder="Enter message for consumer...">
-                    <select id="consumerModuleSelect">
-                        <option value="">Select consumer...</option>
-                    </select>
-                    <button onclick="sendToConsumer()">Send to Consumer</button>
+                    <input type="text" id="consumerMessageInput" placeholder="Enter message (text or HEX like 1c 2c3c 4c)...">
+                        <select id="consumerModuleSelect">
+                            <option value="">Select consumer...</option>
+                        </select>
+                        <select id="messageFormat">
+                            <option value="text">Text</option>
+                            <option value="hex">HEX</option>
+                        </select>
+                        <button onclick="sendToConsumer()">Send to Consumer</button>
                 </div>
             </div>
             
@@ -634,12 +821,14 @@ if __name__ == '__main__':
                 .then(data => {
                     document.getElementById('stats').innerHTML = `
                         <div class="stat-card">
-                            <h3>Connected Modules</h3>
-                            <p style="font-size: 24px; color: green;">${data.connected_modules}</p>
+                            <h3>Connected Consumers</h3>
+                            <p style="font-size: 24px; color: green;">${data.connected_consumers}</p>
+                            <p class="port-info">Port 5002</p>
                         </div>
                         <div class="stat-card">
-                            <h3>Active Providers</h3>
-                            <p style="font-size: 24px; color: purple;">${data.active_providers}</p>
+                            <h3>Connected Providers</h3>
+                            <p style="font-size: 24px; color: purple;">${data.connected_providers}</p>
+                            <p class="port-info">Port 5000</p>
                         </div>
                         <div class="stat-card">
                             <h3>Total Messages</h3>
@@ -652,6 +841,7 @@ if __name__ == '__main__':
                         <div class="stat-card">
                             <h3>Server Time</h3>
                             <p>${data.server_time}</p>
+                            <p class="port-info">Web Port 5001</p>
                         </div>
                     `;
                 });
@@ -676,7 +866,7 @@ if __name__ == '__main__':
                         return;
                     }
                     
-                    let html = '<table><tr><th>Type</th><th>UUID</th><th>Address</th><th>Status</th><th>Last Activity</th></tr>';
+                    let html = '<table><tr><th>Type</th><th>UUID</th><th>Address</th><th>Port</th><th>Status</th><th>Last Activity</th></tr>';
                     let consumerOptions = '<option value="">Select consumer...</option>';
                     let providerOptions = '<option value="">Select provider...</option>';
                     
@@ -690,6 +880,7 @@ if __name__ == '__main__':
                             <td>${module.type}</td>
                             <td class="${connectionClass}">${module.uuid || 'N/A'}</td>
                             <td class="${connectionClass}">${module.address}</td>
+                            <td>${module.port}</td>
                             <td class="${statusClass}">${module.status}</td>
                             <td>${lastActivity}</td>
                         </tr>`;
@@ -772,16 +963,17 @@ if __name__ == '__main__':
         function sendToConsumer() {
             const message = document.getElementById('consumerMessageInput').value;
             const uuid = document.getElementById('consumerModuleSelect').value;
-            
+            const format = document.getElementById('messageFormat').value;
+
             if (!message || !uuid) {
                 document.getElementById('sendStatus').innerHTML = '<p style="color: red;">Fill all fields</p>';
                 return;
             }
-            
+
             fetch('/api/send_message', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ uuid: uuid, message: message })
+                body: JSON.stringify({ uuid: uuid, message: message, format: format })
             })
             .then(response => response.json())
             .then(result => {
@@ -842,12 +1034,16 @@ if __name__ == '__main__':
 </body>
 </html>''')
 
-    # Запускаем TCP сервер и Flask в отдельных потоках
-    tcp_thread = threading.Thread(target=server_program)
-    tcp_thread.daemon = True
-    tcp_thread.start()
+    # Запускаем серверы в отдельных потоках
+    provider_thread = threading.Thread(target=provider_server_program)
+    provider_thread.daemon = True
+    provider_thread.start()
 
-    # Даем TCP серверу время на запуск
+    consumer_thread = threading.Thread(target=consumer_server_program)
+    consumer_thread.daemon = True
+    consumer_thread.start()
+
+    # Даем серверам время на запуск
     time.sleep(1)
     
     # Запускаем Flask сервер

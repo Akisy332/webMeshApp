@@ -32,6 +32,7 @@
         .consumer { background-color: #e8f5e8; }
         .provider { background-color: #e8f0ff; }
         .active-connection { font-weight: bold; }
+        .port-info { font-size: 0.8em; color: #666; }
     </style>
 </head>
 <body>
@@ -58,11 +59,15 @@
             
             <div id="consumerTab" class="tab-content active">
                 <div class="send-form">
-                    <input type="text" id="consumerMessageInput" placeholder="Enter message for consumer...">
-                    <select id="consumerModuleSelect">
-                        <option value="">Select consumer...</option>
-                    </select>
-                    <button onclick="sendToConsumer()">Send to Consumer</button>
+                    <input type="text" id="consumerMessageInput" placeholder="Enter message (text or HEX like 1c 2c3c 4c)...">
+                        <select id="consumerModuleSelect">
+                            <option value="">Select consumer...</option>
+                        </select>
+                        <select id="messageFormat">
+                            <option value="text">Text</option>
+                            <option value="hex">HEX</option>
+                        </select>
+                        <button onclick="sendToConsumer()">Send to Consumer</button>
                 </div>
             </div>
             
@@ -121,12 +126,14 @@
                 .then(data => {
                     document.getElementById('stats').innerHTML = `
                         <div class="stat-card">
-                            <h3>Connected Modules</h3>
-                            <p style="font-size: 24px; color: green;">${data.connected_modules}</p>
+                            <h3>Connected Consumers</h3>
+                            <p style="font-size: 24px; color: green;">${data.connected_consumers}</p>
+                            <p class="port-info">Port 5002</p>
                         </div>
                         <div class="stat-card">
-                            <h3>Active Providers</h3>
-                            <p style="font-size: 24px; color: purple;">${data.active_providers}</p>
+                            <h3>Connected Providers</h3>
+                            <p style="font-size: 24px; color: purple;">${data.connected_providers}</p>
+                            <p class="port-info">Port 5000</p>
                         </div>
                         <div class="stat-card">
                             <h3>Total Messages</h3>
@@ -139,6 +146,7 @@
                         <div class="stat-card">
                             <h3>Server Time</h3>
                             <p>${data.server_time}</p>
+                            <p class="port-info">Web Port 5001</p>
                         </div>
                     `;
                 });
@@ -163,7 +171,7 @@
                         return;
                     }
                     
-                    let html = '<table><tr><th>Type</th><th>UUID</th><th>Address</th><th>Status</th><th>Last Activity</th></tr>';
+                    let html = '<table><tr><th>Type</th><th>UUID</th><th>Address</th><th>Port</th><th>Status</th><th>Last Activity</th></tr>';
                     let consumerOptions = '<option value="">Select consumer...</option>';
                     let providerOptions = '<option value="">Select provider...</option>';
                     
@@ -177,6 +185,7 @@
                             <td>${module.type}</td>
                             <td class="${connectionClass}">${module.uuid || 'N/A'}</td>
                             <td class="${connectionClass}">${module.address}</td>
+                            <td>${module.port}</td>
                             <td class="${statusClass}">${module.status}</td>
                             <td>${lastActivity}</td>
                         </tr>`;
@@ -259,16 +268,17 @@
         function sendToConsumer() {
             const message = document.getElementById('consumerMessageInput').value;
             const uuid = document.getElementById('consumerModuleSelect').value;
-            
+            const format = document.getElementById('messageFormat').value;
+
             if (!message || !uuid) {
                 document.getElementById('sendStatus').innerHTML = '<p style="color: red;">Fill all fields</p>';
                 return;
             }
-            
+
             fetch('/api/send_message', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ uuid: uuid, message: message })
+                body: JSON.stringify({ uuid: uuid, message: message, format: format })
             })
             .then(response => response.json())
             .then(result => {
