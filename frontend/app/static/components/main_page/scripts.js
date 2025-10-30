@@ -9,35 +9,11 @@ const tableManager = new TableManager('table-body');
 
 function windowIndexReadyFunc() {
 
-    // if (typeof SlidePanel !== 'undefined') {
-    //     window.slidePanel = new SlidePanel();
-    // }
-
-    // // Загрузка данных
-    // fetch('/api/initTableMap')
-    //     .then(response => response.json())
-    //     .then(data => {
-    //         console.log(data.table)
-    //         mapManager.setPosition(data.map)
-
-    //         tableManager.updateTable(data.table)
-    //         data.table.forEach(item => {
-    //             mapManager.addOrUpdateMarker(item)
-    //         });
-    //     });
-
-    // essenceCartBtn.addEventListener("click", function () {
-    //     window.location.href = "/database";
-    // });
 
     initSessionList();
     initModalWindow();
 }
 
-// Обработчик кнопки - отправляем запрос на сервер
-// document.getElementById('random-marker').addEventListener('click', function () {
-//     eventBus.emit(EventTypes.APP.RANDOM_POINT);
-// });
 
 document.getElementById('add-data').addEventListener('click', function () {
     // Сбросить форму, если нужно

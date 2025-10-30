@@ -79,7 +79,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.user-service.entrypoints=web"
-      - "traefik.http.routers.user-service.rule=PathPrefix(`/api/user`)"
+      - "traefik.http.routers.user-service.rule=PathPrefix(`/api/users`)"
       - "traefik.http.services.user-service.loadbalancer.server.port=8004"
       - "traefik.http.routers.user-service.middlewares=auth-forward@file,cors@file"
 
@@ -100,12 +100,22 @@ services:
       - auth-service
     labels:
       - "traefik.enable=true"
-      # Основной роутер для всего фронтенда
-      - "traefik.http.routers.frontend.rule=PathPrefix(`/`) && !PathPrefix(`/api/auth`) && !PathPrefix(`/api/user`) && !PathPrefix(`/api/app`) && !PathPrefix(`/api/public`) &&!PathPrefix(`/auth/validate`)"
+
+      # Роутер для корневого пути "/" с более высоким приоритетом
+      - "traefik.http.routers.frontend-root.rule=Path(`/`) || Path(`/table`) || PathPrefix(`/static/`) || PathPrefix(`/socket.io`)"
+      - "traefik.http.routers.frontend-root.service=frontend"
+      - "traefik.http.routers.frontend-root.entrypoints=web"
+      - "traefik.http.routers.frontend-root.priority=100"
+      - "traefik.http.routers.frontend-root.middlewares=cors@file"
+
+      # Основной роутер для остальных путей
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`) || PathPrefix(`/api/sessions`) || !PathPrefix(`/auth/validate`)"
       - "traefik.http.routers.frontend.service=frontend"
       - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.routers.frontend.priority=10"
+      - "traefik.http.routers.frontend.middlewares=auth-forward@file,cors@file"
+
       - "traefik.http.services.frontend.loadbalancer.server.port=5000"
-      # - "traefik.http.routers.frontend.middlewares=auth-forward@file,cors@file"
 
 volumes:
   postgres_data:

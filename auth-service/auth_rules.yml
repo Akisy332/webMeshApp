@@ -1,9 +1,11 @@
 # Минимальные права для ролей (иерархия)
 role_minimum_access:
   public:
+    - path: "/auth/validate"
+      methods: ["GET"]
     - path: "/api/auth/login"
       methods: ["POST"]
-    - path: "/api/auth/register"
+    - path: "/api/users" # регистрация
       methods: ["POST"]
     - path: "/api/auth/logout"
       methods: ["POST"]
@@ -16,19 +18,26 @@ role_minimum_access:
     - path: "/api/auth/health"
       methods: ["GET"]
 
-    - path: "/api/sessions/public"
-      methods: ["GET"]
-    - path: "/config-status"
+    - path: "/api/sessions" # Получить сессии или данные конкретной
       methods: ["GET"]
 
+    - path: "/api/modules"
+      methods: ["GET"]
+
+
+
+    - path: "/api/table"
+      methods: ["GET"]
     - path: "/api/auth/config-status"
+      methods: ["GET"]
+    - path: "/api/auth/reload-config"
       methods: ["GET"]
 
   user:
     - path: "/api/profile"
       methods: ["GET", "PUT"]
-    - path: "/api/sessions"
-      methods: ["GET", "POST"]
+    - path: "/api/sessions" 
+      methods: ["POST"] # Добавить сессию
     - path: "/api/analytics/basic"
       methods: ["GET"]
 
@@ -36,18 +45,13 @@ role_minimum_access:
 
 
     - path: "/api/sessions"
-      methods: ["PUT", "DELETE"]  # Дополнительные методы к user правам
+      methods: ["DELETE"]  # Удалить сессию
     - path: "/api/content"
       methods: ["GET", "POST", "PUT"]
     - path: "/api/analytics/advanced"
       methods: ["GET"]
 
   admin:
-
-
-
-    - path: "/api/users"
-      methods: ["GET", "POST", "PUT", "DELETE"]
     - path: "/api/analytics"
       methods: ["GET", "POST"]
     - path: "/api/admin"

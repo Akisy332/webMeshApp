@@ -61,12 +61,12 @@ function initSessionList() {
 
                 // Загружаем данные сессии
                 try {
-                    const response = await fetch(`/api/sessions/${sessionToSelect.id}/data`);
+                    const response = await fetch(`/api/sessions/${sessionToSelect.id}`);
                     if (!response.ok) throw new Error('Ошибка загрузки данных');
 
                     const sessionData = await response.json();
-                    eventBus.emit(EventTypes.SESSION.LOAD_DATA, sessionData);
                     eventBus.emit(EventTypes.SESSION.SELECTED, sessionToSelect);
+                    eventBus.emit(EventTypes.SESSION.LOAD_DATA, sessionData);
                 } catch (error) {
                     console.error('Ошибка загрузки данных сессии:', error);
                     eventBus.emit(EventTypes.ERROR, 'Ошибка загрузки данных сессии');
@@ -97,17 +97,17 @@ function initSessionList() {
         localStorage.setItem('selectedSessionId', sessionId);
 
         try {
-            const response = await fetch(`/api/sessions/${sessionId}/data`);
-            if (!response.ok) throw new Error('Ошибка загрузки данных');
-
-            const sessionData = await response.json();
-            eventBus.emit(EventTypes.SESSION.LOAD_DATA, sessionData);
-
             let selectedSession = sessions.find(s => s.id == sessionId);
             if (!selectedSession) {
                 throw new Error('Выбранная сессия не найдена в списке');
             }
+
+            const response = await fetch(`/api/sessions/${sessionId}`);
+            if (!response.ok) throw new Error('Ошибка загрузки данных');
+
+            const sessionData = await response.json();
             eventBus.emit(EventTypes.SESSION.SELECTED, selectedSession);
+            eventBus.emit(EventTypes.SESSION.LOAD_DATA, sessionData);
 
         } catch (error) {
             console.error('Ошибка:', error);

@@ -97,7 +97,7 @@ class AuthManager {
 
     async register(email, username, password) {
         try {
-            const response = await this.apiRequest('/api/auth/register', 'POST', {
+            const response = await this.apiRequest('/api/users', 'POST', {
                 email,
                 username,
                 password

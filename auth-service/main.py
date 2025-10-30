@@ -219,7 +219,7 @@ async def config_status():
     """Публичный статус конфигурации"""
     return auth_config.get_stats()
 
-@app.post("/api/auth/reload-config")
+@app.get("/api/auth/reload-config")
 async def reload_config():
     """Перезагрузка конфигурации (требует админских прав)"""
     auth_config.force_reload()

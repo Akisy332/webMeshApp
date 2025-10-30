@@ -23,7 +23,7 @@ class TableManager {
         // Подписка на событие загрузки новой сессии
         eventBus.on(EventTypes.SESSION.LOAD_DATA, (sessionData) => {
             this.clearTable();
-            this.updateTable(sessionData);
+            this.updateTable(sessionData["modules"]);
         });
     }
 
@@ -126,15 +126,6 @@ class TableManager {
         timeCell.textContent = this.formatTime(message.datetime_unix);
         timeCell.dataset.originalTime = message.datetime_unix;
         row.appendChild(timeCell);
-
-        // Действия
-        const actionsCell = document.createElement('td');
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'btn btn-danger btn-sm';
-        deleteBtn.textContent = 'Удалить';
-        this.setupDeleteButton(deleteBtn, message.id_module, message.module_name);
-        actionsCell.appendChild(deleteBtn);
-        row.appendChild(actionsCell);
 
         // test
         const testCell = document.createElement('td');

@@ -6,8 +6,11 @@ import os
 import random
 from datetime import datetime
 
-# Получаем менеджер PostgreSQL
 db_manager = get_postgres_manager()
+
+# /////////////////////////////////////////////////////////// #
+# //---------------------- Template -----------------------// #
+# /////////////////////////////////////////////////////////// #
 
 @app.route('/')
 def main_page():
@@ -28,11 +31,10 @@ def database_page():
     """Страница просмотра базы данных"""
     return render_template('database_viewer/template.html')
 
-@app.route('/health')
-def health():
-    return jsonify({'status': 'OK', 'service': 'frontend'})
+# /////////////////////////////////////////////////////////// #
+# //----------------------- Sessions ----------------------// #
+# /////////////////////////////////////////////////////////// #
 
-# API endpoints для фронтенда
 @app.route('/api/sessions', methods=['GET'])
 def getSessions():
     """Получение списка всех сессий"""
@@ -75,16 +77,18 @@ def create_session():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
-@app.route('/api/sessions/<int:session_id>/data', methods=['GET'])
+@app.route('/api/sessions/<int:session_id>', methods=['GET'])
 def get_session_data(session_id):
     """Получение данных конкретной сессии"""
     try:
-        data = db_manager.get_last_message(session_id)
+        data = {}
+        data["modules"] = db_manager.get_last_message(session_id)
+        data["map"] = db_manager.get_session_map_view(session_id)
         return jsonify(data)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/sessions/<session_id>', methods=['DELETE'])
+@app.route('/api/sessions/<int:session_id>', methods=['DELETE'])
 def delete_session(session_id):
     """Удалить сессию"""
     try:
@@ -97,6 +101,19 @@ def delete_session(session_id):
         return jsonify({'message': 'Сессия удалена'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/sessions/data/<int:session_id>', methods=['GET'])
+def get_session_center_radius(session_id):
+    """Получение данных конкретной сессии"""
+    try:
+        data = db_manager.get_session_map_view(session_id)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# /////////////////////////////////////////////////////////// #
+# //------------------------ Table ------------------------// #
+# /////////////////////////////////////////////////////////// #
 
 @app.route('/api/table/users/search')
 def search_user():
@@ -286,21 +303,12 @@ def get_users_datetime():
         print(e)
         return jsonify({'success': False, 'error': str(e)}), 500            
 
-@app.route('/api/initTableMap')
-def initTableMap():
-    map_config = {
-        "lat": 56.4520,
-        "lon":  84.9615,
-        "zoom": 13
-    }
-    table = db_manager.get_last_message(1)
-    data = {
-        "table": table,
-        "map": map_config
-    }
-    return data
 
-@app.route('/api/map/trace', methods=['GET'])
+# /////////////////////////////////////////////////////////// #
+# //----------------------- Modules -----------------------// #
+# /////////////////////////////////////////////////////////// #
+
+@app.route('/api/modules/trace', methods=['GET'])
 def get_trace_module():
     id_module = request.args.get('id_module', type=str)
     id_session = request.args.get('id_session', type=int)
@@ -310,15 +318,43 @@ def get_trace_module():
    
     return jsonify(data)
 
+@app.route('/api/modules', methods=['GET'])
+def get_modules():
+    modules = db_manager.get_all_modules()
+    return jsonify(modules)
+
+@app.route('/api/modules/<int:module_id>/stats', methods=['GET'])
+def get_module_stats(module_id):
+    """Получение статистики по модулю"""
+    try:
+        session_id = request.args.get('session_id', type=int)
+        stats = db_manager.get_module_statistics(module_id, session_id)
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/modules/search', methods=['GET'])
+def search_modules():
+    """Поиск модулей"""
+    try:
+        search_term = request.args.get('q', '')
+        if not search_term:
+            return jsonify([])
+        
+        results = db_manager.search_modules(search_term)
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# /////////////////////////////////////////////////////////// #
+# //------------------------ Other ------------------------// #
+# /////////////////////////////////////////////////////////// #
+
 @app.route('/api/database/data')
 def get_data():
     data = db_manager.get_all_data()
     return jsonify(data)
-
-@app.route('/api/database/modules')
-def get_modules():
-    modules = db_manager.get_all_modules()
-    return jsonify(modules)
 
 @app.route('/api/database/sessions')
 def get_sessions():
@@ -388,8 +424,6 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-
-
 @app.route('/api/database/stats')
 def get_database_stats():
     """Получение статистики базы данных"""
@@ -399,25 +433,6 @@ def get_database_stats():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/modules/<int:module_id>/stats')
-def get_module_stats(module_id):
-    """Получение статистики по модулю"""
-    try:
-        session_id = request.args.get('session_id', type=int)
-        stats = db_manager.get_module_statistics(module_id, session_id)
-        return jsonify(stats)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/search/modules')
-def search_modules():
-    """Поиск модулей"""
-    try:
-        search_term = request.args.get('q', '')
-        if not search_term:
-            return jsonify([])
-        
-        results = db_manager.search_modules(search_term)
-        return jsonify(results)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+@app.route('/health')
+def health():
+    return jsonify({'status': 'OK', 'service': 'frontend'})

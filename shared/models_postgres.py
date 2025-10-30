@@ -10,6 +10,7 @@ import colorsys
 from contextlib import contextmanager
 import atexit
 import threading
+import math
 
 class PostgreSQLExecutor:
     def __init__(self, db_url: str, min_conn: int = 1, max_conn: int = 20):
@@ -595,24 +596,36 @@ class PostgreSQLDatabaseManager:
     datetime_val: Optional[datetime] = None
 ) -> Optional[int]:
         """Создание новой сессии"""
-        try:
-            datetime_str = (datetime_val if datetime_val is not None else datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
-
-            result = self.db.execute(
-                "INSERT INTO sessions (name, description, datetime) VALUES (%s, %s, %s) RETURNING id",
-                params=(session_name, description, datetime_str),
-                fetch_one=True
-            )
-
-            if result:
-                session_id = result['id']
-                self.last_session = session_id
-                return session_id
-            return None
-        except Exception as e:
-            logging.error(f"Ошибка при создании сессии: {e}")
-            return None
+        max_retries = 2
         
+        for attempt in range(max_retries):
+            try:
+                datetime_str = (datetime_val if datetime_val is not None else datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
+    
+                result = self.db.execute(
+                    "INSERT INTO sessions (name, description, datetime) VALUES (%s, %s, %s) RETURNING id",
+                    params=(session_name, description, datetime_str),
+                    fetch_one=True
+                )
+    
+                if result:
+                    session_id = result['id']
+                    self.last_session = session_id
+                    return session_id
+                return None
+                
+            except Exception as e:
+                if "duplicate key value violates unique constraint" in str(e) and attempt < max_retries - 1:
+                    logging.warning(f"Обнаружен конфликт ID, сбрасываю последовательность...")
+                    # Сбрасываем sequence на актуальное значение
+                    self.db.execute(
+                        "SELECT setval('sessions_id_seq', (SELECT COALESCE(MAX(id), 0) FROM sessions))"
+                    )
+                    continue
+                else:
+                    logging.error(f"Ошибка при создании сессии: {e}")
+                    return None
+               
     def _get_or_create_session(self, id_session: Optional[int] = None, 
                              session_name: str = "", description: str = "") -> Optional[int]:
         """Получение существующей сессии или создание новой"""
@@ -869,7 +882,7 @@ class PostgreSQLDatabaseManager:
                         lon = coord_data['lon']
                     if alt is None:
                         alt = coord_data['alt']
-            
+        
             result.append({
                 'id': row['id'],
                 'id_module': format(row['id_module'], 'X'),
@@ -1098,6 +1111,130 @@ class PostgreSQLDatabaseManager:
             'last_message': stats.get('last_message'),
             'avg_rssi': float(stats.get('avg_rssi', 0)) if stats.get('avg_rssi') else None,
             'avg_snr': float(stats.get('avg_snr', 0)) if stats.get('avg_snr') else None
+        }
+        
+    def get_session_center_radius(self, session_id: int) -> Dict[str, Any]:
+        """
+        Находит минимальную окружность, охватывающую ВСЕ точки сессии
+        """
+        query = """
+        WITH bounds AS (
+            SELECT 
+                MIN(lat) as min_lat,
+                MAX(lat) as max_lat,
+                MIN(lon) as min_lon,
+                MAX(lon) as max_lon
+            FROM data d
+            JOIN sessions s ON d.id_session = s.id
+            WHERE d.id_session = %s
+              AND s.hidden = FALSE
+              AND d.gps_ok = TRUE
+        ),
+        center AS (
+            SELECT 
+                (min_lat + max_lat) / 2 as center_lat,
+                (min_lon + max_lon) / 2 as center_lon
+            FROM bounds
+        ),
+        farthest_point AS (
+            SELECT 
+                lat,
+                lon,
+                6371 * ACOS(
+                    COS(RADIANS(c.center_lat)) * COS(RADIANS(lat)) *
+                    COS(RADIANS(lon) - RADIANS(c.center_lon)) +
+                    SIN(RADIANS(c.center_lat)) * SIN(RADIANS(lat))
+                ) as distance_km
+            FROM data d
+            CROSS JOIN center c
+            WHERE d.id_session = %s
+              AND d.gps_ok = TRUE
+            ORDER BY distance_km DESC
+            LIMIT 1
+        )
+        SELECT 
+            c.center_lat,
+            c.center_lon,
+            fp.distance_km as radius_km,
+            (SELECT COUNT(*) FROM data WHERE id_session = %s AND gps_ok = TRUE) as points_count
+        FROM center c, farthest_point fp
+        """
+
+        result = self.db.execute(query, params=[session_id, session_id, session_id], fetch_one=True) or {}
+
+        radius_km = result.get('radius_km')
+        if radius_km is not None:
+            radius_km = round(float(radius_km), 4) * 2
+
+        return {
+            'session_id': session_id,
+            'center_lat': result.get('center_lat'),
+            'center_lon': result.get('center_lon'),
+            'radius_km': radius_km,
+            'points_count': result.get('points_count', 0)
+        }
+
+    def get_leaflet_zoom_level(self, radius_km: float) -> int:
+        """
+        Определяет уровень масштабирования Leaflet на основе радиуса в км
+        """
+        # Соотношение радиуса (км) к уровню масштабирования Leaflet
+        zoom_levels = [
+            (10000, 3),   # Очень далеко - весь мир
+            (5000, 4),
+            (2000, 5),
+            (1000, 6),
+            (500, 7),
+            (200, 8),
+            (100, 9),
+            (50, 10),
+            (20, 11),
+            (10, 12),
+            (5, 13),
+            (2, 14),
+            (1, 15),      # Город
+            (0.5, 16),    # Район
+            (0.2, 17),    # Несколько улиц
+            (0.1, 18),    # Одна улица
+            (0.05, 19),   # Здание
+            (0.01, 20),   # Детали здания
+            (0, 21)       # Максимальное приближение
+        ]
+
+        for max_radius, zoom in zoom_levels:
+            if radius_km >= max_radius:
+                return zoom
+    
+        return 21  # Максимальный zoom
+
+    def get_session_map_view(self, session_id: int) -> Dict[str, Any]:
+        """
+        Получает центр, радиус и настройки карты для сессии
+        """
+        # Получаем данные о центре и радиусе
+        session_data = self.get_session_center_radius(session_id)
+
+        if not session_data or session_data.get('radius_km') is None:
+            return {
+                'session_id': session_id,
+                'error': 'No data available',
+                'lat': 56.4520,
+                'lon': 84.9615,
+                'zoom': 13  # zoom по умолчанию
+            }
+
+        radius_km = session_data['radius_km']
+
+        # Определяем zoom level
+        zoom = self.get_leaflet_zoom_level(radius_km)
+
+        return {
+            'session_id': session_id,
+            'lat': session_data['center_lat'],
+            'lon': session_data['center_lon'],
+            'radius_km': round(radius_km, 4),
+            'zoom': zoom,
+            'count': session_data['points_count']
         }
 
     def search_modules(self, search_term: str) -> List[Dict[str, Any]]:

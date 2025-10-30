@@ -9,6 +9,9 @@ class SegmentedPath {
 
         this.isLiveMode = true
 
+        this.markerVisible = true;
+        this.traceVisible = true;
+
         // Все точки пути (включая те, что еще не отображаются)
         this.allPoints = [];
 
@@ -33,6 +36,11 @@ class SegmentedPath {
         this.maxSegmentLength = 0;
 
         this.init();
+    }
+
+    setTraceVisible(visible) {
+        this.traceVisible = visible;
+        this.updateSegmentsDisplay();
     }
 
     // Инициализация пути
@@ -141,11 +149,6 @@ class SegmentedPath {
 
     // Обновление отображения сегментов
     updateSegmentsDisplay() {
-        // Сначала скрываем все сегменты
-        for (let segIdx = 0; segIdx < this.segmentPaths.length; segIdx++) {
-            this.segmentPaths[segIdx].setStyle({ opacity: 0, weight: 0 });
-        }
-
         // Определяем, какие сегменты нужно отобразить
         let pointsProcessed = 0;
         let lastVisibleSegment = -1;
@@ -153,6 +156,9 @@ class SegmentedPath {
         // Если в режиме реального времени, показываем все точки
         // Если в режиме ползунка, показываем только точки до текущего времени
         const pointsToShow = this.isLiveMode ? this.allPoints : this.visiblePoints;
+
+        // Обновляем видимость сегментов пути
+        const shouldShowTrace = this.traceVisible && this.markerVisible && this.visible;
 
         for (let segIdx = 0; segIdx < this.segments.length; segIdx++) {
             const segment = this.segments[segIdx];
@@ -162,8 +168,8 @@ class SegmentedPath {
             if (segmentEndIndex < pointsToShow.length) {
                 this.segmentPaths[segIdx].setLatLngs(segment.map(p => p.latlng));
                 this.segmentPaths[segIdx].setStyle({
-                    opacity: this.visible ? 1 : 0,
-                    weight: this.visible ? 3 : 0
+                    opacity: shouldShowTrace ? 1 : 0,
+                    weight: shouldShowTrace ? 3 : 0
                 });
                 lastVisibleSegment = segIdx;
             }
@@ -172,23 +178,28 @@ class SegmentedPath {
                 const visibleInSegment = pointsToShow.slice(pointsProcessed, pointsToShow.length);
                 this.segmentPaths[segIdx].setLatLngs(visibleInSegment.map(p => p.latlng));
                 this.segmentPaths[segIdx].setStyle({
-                    opacity: this.visible ? 1 : 0,
-                    weight: this.visible ? 3 : 0
+                    opacity: shouldShowTrace ? 1 : 0,
+                    weight: shouldShowTrace ? 3 : 0
                 });
                 lastVisibleSegment = segIdx;
                 break;
             } else {
-                break;
+                // Скрываем невидимые сегменты
+                this.segmentPaths[segIdx].setStyle({
+                    opacity: 0,
+                    weight: 0
+                });
             }
 
             pointsProcessed += segment.length;
         }
 
-        // Обновляем маркер
+        // Обновляем маркер (маркер виден независимо от пути)
+        const shouldShowMarker = this.markerVisible && this.visible;
         if (pointsToShow.length > 0) {
             const lastPoint = pointsToShow[pointsToShow.length - 1];
             this.marker.setLatLng(lastPoint.latlng);
-            this.marker.setOpacity(this.visible ? 1 : 0);
+            this.marker.setOpacity(shouldShowMarker ? 1 : 0);
         } else {
             this.marker.setOpacity(0);
         }
@@ -198,9 +209,19 @@ class SegmentedPath {
     toggleVisibility() {
         this.visible = !this.visible;
         this.updateSegmentsDisplay();
-        this.marker.setOpacity(this.visible && (this.isLiveMode ? this.allPoints.length > 0 : this.visiblePoints.length > 0) ? 1 : 0);
         return this.visible;
     }
+
+    setMarkerVisible(visible) {
+        this.markerVisible = visible;
+        this.updateSegmentsDisplay();
+    }
+
+    setTraceVisible(visible) {
+        this.traceVisible = visible;
+        this.updateSegmentsDisplay();
+    }
+
 
     createCustomIcon(color) {
         return L.divIcon({
@@ -403,7 +424,7 @@ class MapManager {
             zoom: 13
         };
 
-        // Initialize map
+        // Иницилизация карты
         this.map = L.map(mapId).setView(
             [map_config.lat, map_config.lon],
             map_config.zoom
@@ -414,13 +435,13 @@ class MapManager {
             maxZoom: 19
         }).addTo(this.map);
 
-        // Альтернативный слой (например, GoogleSattelite)
+        // Альтернативный слой
         this.GoogleSatteliteLayer = L.tileLayer('https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga', {
             attribution: '© GoogleSattelite',
             maxZoom: 19
         });
 
-        // Добавляем переключатель слоёв
+        // Переключатель слоёв
         this.baseLayers = {
             "OpenStreetMap": this.osmLayer,
             "GoogleSattelite": this.GoogleSatteliteLayer
@@ -443,16 +464,19 @@ class MapManager {
         eventBus.on(EventTypes.TABLE.CHECKBOX_TRACE, (data) => {
             this.setTraceVisible(data.id_module, data.flag);
         });
+
         eventBus.on(EventTypes.SOCKET.NEW_DATA_MODULE, (data) => {
-            if (!data || !data.coords || !data.coords.lat || !data.coords.lon) return
-            else {
-                let path = this.paths.get(data.id_module);
-                if (path) {
-                    this.updateTrace(data);
-                }
+            if (!data || !data.coords || !data.coords.lat || !data.coords.lon) return;
+
+            let path = this.paths.get(data.id_module);
+
+            if (path) {
+                this.updateTrace(data);
+            } else {
                 this.addOrUpdateMarker(data);
             }
         });
+
 
         eventBus.on(EventTypes.ROUTE_SLIDER.TIME_SLIDER_CHANGED, currentUnixTime => {
             this.paths.forEach((path) => {
@@ -468,18 +492,88 @@ class MapManager {
                 path.updateSegmentsDisplay();
             });
         });
+
         // Подписка на событие загрузки новой сессии
         eventBus.on(EventTypes.SESSION.LOAD_DATA, (sessionData) => {
-            this.clearMap();
-            sessionData.forEach((data) => {
+            console.info("Map: Event LOAD_DATA : ",
+                sessionData.map.lat,
+                sessionData.map.lon,
+                sessionData.map.zoom
+            );
+            this.setPosition(sessionData.map)
+
+            // Добавляем маркеры из данных сессии
+            sessionData["modules"].forEach((data) => {
                 this.addOrUpdateMarker(data);
             });
-
         });
 
         eventBus.on(EventTypes.SESSION.SELECTED, (session) => {
+            if (this.currentSession && this.currentSession.id !== session.id) {
+                // Сессия изменилась - очищаем карту
+                this.clearMap();
+            }
             this.currentSession = session;
         });
+    }
+
+
+    addOrUpdateMarker(data) {
+        if (!data || !data.id_module) return;
+
+        // Если путь уже существует, не создаем основной маркер
+        if (this.paths.get(data.id_module)) {
+            return;
+        }
+
+        let marker = this.markers.get(data.id_module);
+        if (data.coords && data.coords.lat != null && data.coords.lon != null) {
+            const latlng = [data.coords.lat, data.coords.lon];
+
+            if (marker) {
+                marker.setLatLng(latlng);
+                marker.setPopupContent(data.module_name || data.id_module);
+                marker.setIcon(this.createCustomIcon(data.module_color || '#FF0000'));
+            } else {
+                console.info("Map: Create marker", data.id_module)
+                marker = L.marker(latlng, {
+                    icon: this.createCustomIcon(data.module_color || '#FF0000')
+                }).bindPopup(data.module_name || data.id_module);
+
+                marker.addTo(this.map);
+                this.markers.set(data.id_module, marker);
+            }
+        }
+    }
+
+    setPosition(data) {
+        this.map.setView([data.lat, data.lon], data.zoom)
+    }
+
+    removeMainMarker(id_module) {
+        const mainMarker = this.markers.get(id_module);
+        if (mainMarker) {
+            this.map.removeLayer(mainMarker);
+            this.markers.delete(id_module);
+        }
+    }
+
+    setMarkerVisible(id_module, flag) {
+        const path = this.paths.get(id_module);
+        if (path) {
+            // Управляем маркером пути
+            path.setMarkerVisible(flag);
+        } else {
+            // Если пути нет, управляем основным маркером
+            const mainMarker = this.markers.get(id_module);
+            if (mainMarker) {
+                if (flag && !this.map.hasLayer(mainMarker)) {
+                    mainMarker.addTo(this.map);
+                } else if (!flag && this.map.hasLayer(mainMarker)) {
+                    this.map.removeLayer(mainMarker);
+                }
+            }
+        }
     }
 
     clearMap() {
@@ -491,71 +585,66 @@ class MapManager {
 
         // Clear all paths
         this.paths.forEach((path, id_module) => {
-            // this.map.removeLayer(path);
-            path.remove()
+            path.remove();
         });
         this.paths.clear();
-        console.info("Map: ", "Cleared")
-        // // Clear all additional layers
-        // Object.keys(this.layers).forEach(layerName => {
-        //     this.map.removeLayer(this.layers[layerName]);
-        // });
-        // this.layers = {};
+
+        console.info("Map: ", "Cleared");
     }
 
-    setPosition(data) {
-        this.map.setView([data.lat, data.lon], data.zoom)
-    }
+    createOrUpdateTrace(data) {
+        if (!data || !data.id_module || !data.coords) return;
 
-    addOrUpdateMarker(data) {
-        // if (!data || !data.id_module) return;
+        let path = this.paths.get(data.id_module);
 
-        // let marker = this.markers.get(data.id_module);
-        // if (data.coords.lat != null && data.coords.lon != null) {
-        //     const latlng = [data.coords.lat, data.coords.lon];
+        const coords = Array.isArray(data.coords[0]) &&
+            (typeof data.coords[0][0] === 'number' || Array.isArray(data.coords[0][0]))
+            ? data.coords
+            : [data.coords];
 
-        //     if (marker) {
-        //         marker.setLatLng(latlng);
-        //         marker.setPopupContent(data.module_name || data.id_module);
-        //         marker.setIcon(this.createCustomIcon(data.module_color || '#FF0000'));
+        if (!path) {
+            // Создаем новый путь
+            console.log("Map: Create Trace for marker ", data.id_module);
+            path = new SegmentedPath(this.map, data.module_color || '#FF0000');
+            path.isLiveMode = this.isLiveMode;
+            path.setLatLngs(coords, data.timestamps);
 
-        //     } else {
-        //         console.log("Create marker", data.id_module)
-        //         marker = L.marker(latlng, {
-        //             icon: this.createCustomIcon(data.module_color || '#FF0000')
-        //         }).bindPopup(data.module_name || data.id_module);
+            // Удаляем старый основной маркер, так как он больше не нужен
+            this.removeMainMarker(data.id_module);
 
-        //         marker.addTo(this.map);
-
-        //         this.markers.set(data.id_module, marker);
-        //     }
-        // }
-        return
-    }
-
-    setMarkerVisible(id_module, flag) {
-        let marker = this.markers.get(id_module);
-        if (flag && !this.map.hasLayer(marker)) {
-            marker.addTo(this.map);
-        } else if (!flag && this.map.hasLayer(marker)) {
-            this.map.removeLayer(marker);
+            this.paths.set(data.id_module, path);
+        } else {
+            // Обновляем существующий путь
+            path.setLatLngs(coords, data.timestamps);
+            path.setStyle({
+                color: data.module_color || '#FF0000'
+            });
         }
     }
 
     async setTraceVisible(id_module, flag) {
         let path = this.paths.get(id_module);
-        if (!path) {
-            const response = await this.getTraceModule(id_module, this.currentSession.id, 0);
-            this.addTrace(response);
-        } else
-            path.toggleVisibility();
-        await this.setTimeRange();
-        //     if (flag && !this.map.hasLayer(path)) {
-        //     path.addTo(this.map);
-        // } else if (!flag && this.map.hasLayer(path)) {
-        //     this.map.removeLayer(path);
-        // }
 
+        if (!path && flag) {
+            // Если пути нет и включаем чекбокс - загружаем трек
+            await this.loadAndCreateTrace(id_module);
+            path = this.paths.get(id_module);
+        } else if (path) {
+            // Управляем видимостью пути
+            path.setTraceVisible(flag);
+        }
+
+        // Передаем временной диапазон всех видимых путей
+        await this.setTimeRange();
+    }
+
+    async loadAndCreateTrace(id_module) {
+        try {
+            const response = await this.getTraceModule(id_module, this.currentSession.id, 0);
+            this.createOrUpdateTrace(response);
+        } catch (error) {
+            console.error('Map: Error when uploading a track:', error);
+        }
     }
 
     createCustomIcon(color) {
@@ -572,110 +661,80 @@ class MapManager {
 
     addTrace(data) {
         if (!data || !data.id_module || !data.coords) return;
-        // Получаем текущий путь
+
         let path = this.paths.get(data.id_module);
 
-        // Если coords - массив массивов (множество точек)
         const coords = Array.isArray(data.coords[0]) &&
             (typeof data.coords[0][0] === 'number' || Array.isArray(data.coords[0][0]))
             ? data.coords
             : [data.coords];
 
         if (!path) {
-            console.log("Create Trace for marker ", data.id_module);
-            // Создаем новый путь со всеми координатами
-            // path = L.polyline(coords, {
-            //     color: data.module_color || '#FF0000',
-            //     weight: data.width || 2
-            // }).addTo(this.map);
-
+            console.info("Create Trace for marker ", data.id_module);
             path = new SegmentedPath(this.map, data.module_color || '#FF0000');
             path.isLiveMode = this.isLiveMode;
             path.setLatLngs(coords, data.timestamps);
 
+            // Устанавливаем начальную видимость - маркер включен, путь включен
+            path.setMarkerVisible(true);
+            path.setTraceVisible(true);
+
             this.paths.set(data.id_module, path);
-
-
-
         }
+    }
+
+    getMarkerState(id_module) {
+        const path = this.paths.get(id_module);
+        return path ? path.markerVisible : false;
     }
 
     async setTimeRange() {
         let min = 9999999999;
         let max = 0;
+        let hasVisiblePaths = false;
 
         this.paths.forEach((path) => {
             const dataPath = path.getInfo();
-            if (dataPath.visible && dataPath.timeRange.min < min && dataPath.timeRange.min != 0) min = dataPath.timeRange.min;
-            if (dataPath.visible && dataPath.timeRange.max > max) max = dataPath.timeRange.max;
+            // Учитываем только видимые пути (traceVisible)
+            if (dataPath.visible && path.traceVisible && dataPath.timeRange.min && dataPath.timeRange.max) {
+                if (dataPath.timeRange.min < min) min = dataPath.timeRange.min;
+                if (dataPath.timeRange.max > max) max = dataPath.timeRange.max;
+                hasVisiblePaths = true;
+            }
         });
 
-        if (min === 9999999999) min = 0;
+        // Если нет видимых путей, используем значения по умолчанию
+        if (!hasVisiblePaths) {
+            min = 0;
+            max = 0;
+        } else if (min === 9999999999) {
+            min = 0;
+        }
 
-        console.log("Время пути: ", min, " - ", max);
         eventBus.emit(EventTypes.ROUTE_SLIDER.TIME_RANGE_CHANGED, { min, max });
     }
 
     updateTrace(data) {
         if (!data || !data.id_module || !data.coords) return;
 
-        // Получаем текущий путь
         let path = this.paths.get(data.id_module);
+        if (!path) return;
 
-        // Обработка разных форматов координат
-        let coords = [];
-        let timestamps = null;
+        // Добавляем новую точку в путь
+        const coords = [data.coords.lat, data.coords.lon];
+        const timestamp = data.datetime_unix || Date.now() / 1000;
 
-        if (Array.isArray(data.coords)) {
-            // Если coords - массив массивов (множество точек)
-            if (Array.isArray(data.coords[0]) &&
-                (typeof data.coords[0][0] === 'number' || Array.isArray(data.coords[0][0]))) {
-                coords = data.coords;
-            }
-            // Если coords - массив словарей [{lat: ..., lon: ...}, ...]
-            else if (typeof data.coords[0] === 'object' && data.coords[0] !== null) {
-                coords = data.coords.map(coord => {
-                    if (coord.lat !== undefined && coord.lon !== undefined) {
-                        return [coord.lat, coord.lon];
-                    } else if (coord.latitude !== undefined && coord.longitude !== undefined) {
-                        return [coord.latitude, coord.longitude];
-                    }
-                    return null;
-                }).filter(coord => coord !== null);
-            }
-        }
-        // Если coords - одиночный словарь {lat: ..., lon: ...}
-        else if (typeof data.coords === 'object' && data.coords !== null) {
-            if (data.coords.lat !== undefined && data.coords.lon !== undefined) {
-                coords = [[data.coords.lat, data.coords.lon]];
-            } else if (data.coords.latitude !== undefined && data.coords.longitude !== undefined) {
-                coords = [[data.coords.latitude, data.coords.longitude]];
-            }
-        }
+        path.addLatLng(coords, timestamp);
 
-        // Обработка временных меток
-        if (data.datetime_unix !== undefined) {
-            if (Array.isArray(data.datetime_unix)) {
-                timestamps = data.datetime_unix;
-            } else if (typeof data.datetime_unix === 'number') {
-                timestamps = [data.datetime_unix];
-            }
-        }
-
-        if (path && coords.length > 0) {
-            path.addLatLngs(coords, timestamps);
-
-            path.setStyle({
-                color: data.module_color || '#FF0000',
-                weight: data.width || 2
-            });
+        // Обновляем временной диапазон если путь видим
+        if (path.traceVisible) {
+            this.setTimeRange();
         }
     }
 
     async getTraceModule(id_Module, id_Session, id_Message_Type) {
         try {
-            // Используй относительный URL вместо абсолютного
-            const url = `/api/map/trace?id_module=${id_Module}&id_session=${id_Session}&id_message_type=${id_Message_Type}`;
+            const url = `/api/modules/trace?id_module=${id_Module}&id_session=${id_Session}&id_message_type=${id_Message_Type}`;
 
             const response = await fetch(url, {
                 method: 'GET',
@@ -689,10 +748,10 @@ class MapManager {
             }
 
             const data = await response.json();
-            console.log('Получены данные:', data);
+            console.debug('Map: Received track data', data);
             return data;
         } catch (error) {
-            console.error('Ошибка при запросе данных:', error);
+            console.warn('Map: Error when requesting track', error);
             throw error;
         }
     }
