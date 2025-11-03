@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Provider Service</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 10px; 
+            background-color: #f5f5f5; 
+            font-size: 13px;
+        }
+        .container { 
+            max-width: 1800px; 
+            margin: 0 auto; 
+        }
+        .section { 
+            background: white; 
+            padding: 10px; 
+            margin-bottom: 10px; 
+            border-radius: 3px; 
+            border: 1px solid #ddd;
+        }
+        .stats { 
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 8px; 
+            margin-bottom: 10px; 
+        }
+        .stat-card { 
+            background: white; 
+            padding: 8px; 
+            border-radius: 3px; 
+            text-align: center; 
+            border: 1px solid #ddd;
+        }
+        .compact-table {
+            width: 100%;
+            font-size: 12px;
+            border-collapse: collapse;
+        }
+        .compact-table th, .compact-table td {
+            padding: 4px 6px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+        .compact-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+        .connected { color: green; font-weight: bold; }
+        .disconnected { color: #666; }
+        
+        .send-form { 
+            display: flex; 
+            gap: 6px; 
+            margin-top: 8px; 
+            flex-wrap: wrap; 
+        }
+        .send-form input, .send-form select, .send-form button { 
+            padding: 4px 6px; 
+            font-size: 12px;
+            border: 1px solid #ddd;
+            border-radius: 2px;
+        }
+        .send-form input { flex: 2; min-width: 200px; }
+        .send-form select { flex: 1; min-width: 150px; }
+        .send-form button { 
+            background: #007bff; 
+            color: white; 
+            border: none; 
+            cursor: pointer;
+        }
+        
+        .log-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            font-size: 12px;
+        }
+        .log-controls button {
+            padding: 3px 6px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 2px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .message-list { 
+            max-height: 600px; 
+            overflow-y: auto; 
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 6px;
+            background: #fafafa;
+        }
+        
+        .log-entry {
+            margin-bottom: 4px;
+            padding: 4px 6px;
+            border-left: 3px solid #007bff;
+            background: white;
+            border-radius: 2px;
+            font-size: 12px;
+            line-height: 1.2;
+            border: 1px solid #e0e0e0;
+        }
+        .log-warning { border-left-color: #ffc107; background: #fff3cd; }
+        .log-error { border-left-color: #dc3545; background: #f8d7da; }
+        .log-debug { border-left-color: #6c757d; background: #e2e3e5; }
+        
+        .telemetry-entry {
+            border-left-color: #28a745;
+            background: #f8fff9;
+        }
+        
+        .hop-data {
+            margin-top: 4px;
+            padding: 4px;
+            background: #f8f9fa;
+            border-radius: 2px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+        }
+        .hop-item {
+            margin: 2px 0;
+            padding: 2px 4px;
+            background: white;
+            border-radius: 2px;
+            border-left: 2px solid #28a745;
+        }
+        .errors {
+            margin-top: 4px;
+            padding: 3px;
+            background: #f8d7da;
+            border-radius: 2px;
+            font-size: 11px;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 style="margin: 0 0 10px 0;">Provider Service Monitor</h2>
+        
+        <div class="stats" id="stats">
+            <!-- Stats loaded by JavaScript -->
+        </div>
+        
+        <div class="section">
+            <h3 style="margin: 0 0 8px 0;">Connected Providers</h3>
+            <div id="connectedModules">
+                <!-- Modules list -->
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3 style="margin: 0 0 8px 0;">Send Message</h3>
+            <div class="send-form">
+                <input type="text" id="providerMessageInput" placeholder="Enter message...">
+                <select id="providerModuleSelect">
+                    <option value="">Select provider...</option>
+                </select>
+                <button onclick="sendToProvider()">Send</button>
+            </div>
+            <div id="sendStatus" style="font-size: 12px; margin-top: 4px;"></div>
+        </div>
+
+        <div class="section">
+            <h3 style="margin: 0 0 8px 0;">Logs & Telemetry Data</h3>
+            <div class="log-controls">
+                <label>
+                    <input type="checkbox" id="autoRefresh" checked onchange="toggleAutoRefresh()">
+                    Auto Refresh
+                </label>
+                <span>Show last</span>
+                <select id="dataLimit" onchange="changeDataLimit()" style="padding: 2px 4px; font-size: 12px;">
+                    <option value="50">50</option>
+                    <option value="100" selected>100</option>
+                    <option value="200">200</option>
+                </select>
+                <span>messages</span>
+            </div>
+            <div class="message-list" id="systemLogs">
+                <!-- All logs and telemetry data -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedProvider = '';
+        let autoRefresh = true;
+        let dataLimit = 100;
+
+        function toggleAutoRefresh() {
+            autoRefresh = document.getElementById('autoRefresh').checked;
+        }
+
+        function changeDataLimit() {
+            dataLimit = parseInt(document.getElementById('dataLimit').value);
+            loadAllData();
+        }
+        
+        function loadAllData() {
+            if (!autoRefresh) return;
+            
+            // Загружаем логи и телеметрию параллельно
+            Promise.all([
+                fetch('/api/v1/logs').then(r => r.json()),
+                fetch(`/api/v1/parsed_data?limit=${dataLimit}`).then(r => r.json())
+            ]).then(([logs, telemetry]) => {
+                const logsDiv = document.getElementById('systemLogs');
+                
+                if (logs.length === 0 && telemetry.length === 0) {
+                    logsDiv.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">No data</div>';
+                    return;
+                }
+                
+                let html = '';
+                
+                // Объединяем и сортируем все данные по времени
+                const allData = [];
+                
+                // Добавляем логи
+                logs.forEach(log => {
+                    allData.push({
+                        type: 'log',
+                        timestamp: log.timestamp,
+                        data: log
+                    });
+                });
+                
+                // Добавляем телеметрию
+                telemetry.forEach(msg => {
+                    allData.push({
+                        type: 'telemetry',
+                        timestamp: msg.timestamp,
+                        data: msg
+                    });
+                });
+                
+                // Сортируем по времени (новые сверху)
+                allData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
+                // Отображаем
+                allData.forEach(item => {
+                    if (item.type === 'log') {
+                        const log = item.data;
+                        const levelClass = log.level === 'WARNING' ? 'log-warning' : 
+                                         log.level === 'ERROR' ? 'log-error' : 
+                                         log.level === 'DEBUG' ? 'log-debug' : '';
+                        
+                        html += `<div class="log-entry ${levelClass}">
+                            <strong>[${log.timestamp}] [${log.level}]</strong>
+                            ${log.module ? ` ${log.module} -` : ''}
+                            ${log.message}
+                        </div>`;
+                    } else {
+                        const msg = item.data;
+                        const time = new Date(msg.timestamp).toLocaleTimeString();
+                        
+                        html += `<div class="log-entry telemetry-entry">
+                            <strong>[${msg.timestamp}] [TELEMETRY] ${msg.provider} - Packet #${msg.packet_number}</strong>
+                            <div style="margin-top: 3px;"><strong>HEX:</strong> ${msg.hex_data}</div>`;
+                        
+                        if (msg.hops && msg.hops.length > 0) {
+                            html += `<div class="hop-data"><strong>Parsed:</strong>`;
+                            msg.hops.forEach((hop, index) => {
+                                html += `<div class="hop-item">
+                                    Hop ${index + 1} (M${hop.module_num}): 
+                                    lat=${hop.lat?.toFixed(6) || 'N/A'}, 
+                                    lng=${hop.lng?.toFixed(6) || 'N/A'}, 
+                                    alt=${hop.altitude || 'N/A'}, 
+                                    speed=${hop.speed || 'N/A'}, 
+                                    roc=${hop.roc || 'N/A'}
+                                </div>`;
+                            });
+                            html += `</div>`;
+                        }
+                        
+                        if (msg.errors && msg.errors.length > 0) {
+                            html += `<div class="errors">
+                                <strong>Errors:</strong>
+                                ${msg.errors.map(err => `<div>${err}</div>`).join('')}
+                            </div>`;
+                        }
+                        
+                        html += `</div>`;
+                    }
+                });
+                
+                logsDiv.innerHTML = html;
+                
+                // Авто-скролл к новым сообщениям
+                const isScrolledToBottom = logsDiv.scrollHeight - logsDiv.clientHeight <= logsDiv.scrollTop + 1;
+                if (isScrolledToBottom) {
+                    logsDiv.scrollTop = logsDiv.scrollHeight;
+                }
+            }).catch(error => {
+                console.error('Error loading data:', error);
+            });
+        }
+        
+        function loadStats() {
+            fetch('/api/v1/metrics')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('stats').innerHTML = `
+                        <div class="stat-card">
+                            <div>Providers</div>
+                            <div style="font-size: 16px; color: green; font-weight: bold;">${data.connected_providers}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div>Connections</div>
+                            <div style="font-size: 16px; color: blue; font-weight: bold;">${data.active_connections}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div>Sent Msgs</div>
+                            <div style="font-size: 16px; color: orange; font-weight: bold;">${data.sent_messages_count}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div>Total Modules</div>
+                            <div style="font-size: 16px; color: purple; font-weight: bold;">${data.total_modules}</div>
+                        </div>
+                    `;
+                })
+                .catch(error => {
+                    console.error('Error loading stats:', error);
+                });
+        }
+        
+        function loadConnectedModules() {
+            const providerSelect = document.getElementById('providerModuleSelect');
+            selectedProvider = providerSelect.value;
+            
+            fetch('/api/v1/connected_modules')
+                .then(response => response.json())
+                .then(modules => {
+                    const modulesDiv = document.getElementById('connectedModules');
+                    
+                    if (modules.length === 0) {
+                        modulesDiv.innerHTML = '<div style="color: #666; text-align: center; padding: 8px;">No providers connected</div>';
+                        providerSelect.innerHTML = '<option value="">Select provider...</option>';
+                        return;
+                    }
+                    
+                    let html = '<table class="compact-table"><tr><th>Address</th><th>Status</th><th>Last Activity</th></tr>';
+                    let options = '<option value="">Select provider...</option>';
+                    
+                    modules.forEach(module => {
+                        const lastActivity = new Date(module.last_activity * 1000).toLocaleString();
+                        const statusClass = module.status === 'connected' ? 'connected' : 'disconnected';
+                        
+                        html += `<tr>
+                            <td>${module.address}</td>
+                            <td class="${statusClass}">${module.status}</td>
+                            <td>${lastActivity}</td>
+                        </tr>`;
+                        
+                        if (module.status === 'connected') {
+                            const selected = module.address === selectedProvider ? 'selected' : '';
+                            options += `<option value="${module.address}" ${selected}>${module.address}</option>`;
+                        }
+                    });
+                    
+                    html += '</table>';
+                    modulesDiv.innerHTML = html;
+                    providerSelect.innerHTML = options;
+                    
+                    if (selectedProvider && !providerSelect.value) {
+                        selectedProvider = '';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading modules:', error);
+                });
+        }
+        
+        function sendToProvider() {
+            const message = document.getElementById('providerMessageInput').value;
+            const address = document.getElementById('providerModuleSelect').value;
+            
+            if (!message || !address) {
+                document.getElementById('sendStatus').innerHTML = '<span style="color: red;">Please fill all fields</span>';
+                return;
+            }
+            
+            document.getElementById('sendStatus').innerHTML = '<span style="color: blue;">Sending...</span>';
+            
+            fetch('/api/v1/send_message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ address: address, message: message })
+            })
+            .then(response => response.json())
+            .then(result => {
+                const statusDiv = document.getElementById('sendStatus');
+                if (result.status === 'success') {
+                    statusDiv.innerHTML = '<span style="color: green;">Message sent</span>';
+                    document.getElementById('providerMessageInput').value = '';
+                    setTimeout(loadAllData, 500);
+                } else {
+                    statusDiv.innerHTML = `<span style="color: red;">Error: ${result.message}</span>`;
+                }
+            })
+            .catch(error => {
+                document.getElementById('sendStatus').innerHTML = `<span style="color: red;">Network error</span>`;
+            });
+        }
+        
+        // Auto update
+        function updateAll() {
+            loadStats();
+            loadConnectedModules();
+            loadAllData();
+        }
+        
+        // Initial load
+        updateAll();
+        
+        // Auto-update every 2 seconds
+        setInterval(updateAll, 2000);
+        
+        document.addEventListener('visibilitychange', function() {
+            autoRefresh = !document.hidden;
+        });
+    </script>
+</body>
+</html>
