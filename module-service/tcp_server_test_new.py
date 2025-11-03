@@ -14,7 +14,7 @@ from parser import parse_message, HopData
 
 # Data structures
 message_queue = Queue(maxsize=10000)
-client_queues = {}  # Dictionary to store individual deques for each UUID
+
 last_packet_sent = {}  # Dictionary to track last packet sent to each client
 MAX_MESSAGES_PER_CLIENT = 10000  # Constant for maximum messages to store per client
 
@@ -184,153 +184,6 @@ def send_to_provider(address, message):
         if address in provider_connections:
             del provider_connections[address]
         return False
-    
-def handle_consumer(conn, address):
-    """Обработчик для потребителей (порт 5002)"""
-    client_info = f"{address[0]}:{address[1]}"
-    log_message('INFO', f"New consumer connection", client_info)
-    
-    client_uuid = None
-    
-    try:
-        # Установка таймаута (30 секунд)
-        conn.settimeout(30.0)
-        
-        # Step 1: Receive UUID from client
-        data = conn.recv(1024).decode().strip()
-        if not data:  # Соединение закрыто сразу
-            log_message('INFO', f"Consumer disconnected before sending UUID", client_info)
-            return
-            
-        log_message('DEBUG', f"Received data from consumer: {data}", client_info)
-        
-        if data.startswith("UUID:"):
-            # This is a data consumer sending UUID
-            client_uuid = data[5:]  # Extract UUID part
-            
-            # Validate UUID
-            try:
-                uuid_obj = uuid.UUID(client_uuid)
-                log_message('DEBUG', f"Valid UUID: {uuid_obj}", client_info)
-            except ValueError:
-                try:
-                    conn.sendall(b"INVALID_UUID\n")
-                except:
-                    pass
-                log_message('WARNING', f"Invalid UUID: {client_uuid}", client_info)
-                return
-                
-            # Send acceptance
-            try:
-                conn.sendall(b"UUID_ACCEPTED\n")
-            except (ConnectionResetError, BrokenPipeError):
-                log_message('INFO', f"Consumer disconnected during UUID confirmation", client_info)
-                return
-            
-            # Initialize client queue if not exists
-            if client_uuid not in client_queues:
-                client_queues[client_uuid] = deque(maxlen=MAX_MESSAGES_PER_CLIENT)
-                last_packet_sent[client_uuid] = 0
-            
-            # Добавляем в список подключенных модулей
-            module_info = {
-                'uuid': client_uuid,
-                'address': client_info,
-                'type': 'consumer',
-                'port': 5002,
-                'last_activity': time.time(),
-                'status': 'connected'
-            }
-            connected_modules.append(module_info)
-            
-            log_message('INFO', f"Consumer module connected: {client_uuid}", client_info)
-            
-            # Step 2: Handle GET requests
-            while True:
-                try:
-                    data = conn.recv(1024).decode().strip()
-                    if not data:  # Клиент закрыл соединение
-                        log_message('INFO', f"Consumer disconnected", f"{client_info} ({client_uuid})")
-                        break
-                    time.sleep(0.5)
-                    if data == "GET_DATA":
-                        response = get_new_data_for_client(client_uuid)
-                        try:
-                            response = response.strip() + "\n"
-                            conn.sendall(response.encode())
-                            
-                            # Логируем отправленные сообщения
-                            if response.strip() != "NO_DATA":
-                                sent_entry = {
-                                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-                                    'to_uuid': client_uuid,
-                                    'to_address': client_info,
-                                    'message': response.strip(),
-                                    'direction': 'outgoing'
-                                }
-                                sent_messages.append(sent_entry)
-                                log_message('DEBUG', f"Data sent to consumer: {response.strip()}", f"{client_info} ({client_uuid})")
-                                
-                        except (ConnectionResetError, BrokenPipeError, OSError):
-                            log_message('INFO', f"Consumer disconnected during send", f"{client_info} ({client_uuid})")
-                            break
-                            
-                        # Обновляем время активности
-                        for module in connected_modules:
-                            if module.get('uuid') == client_uuid:
-                                module['last_activity'] = time.time()
-                                break
-                                
-                    else:
-                        try:
-                            conn.sendall(b"UNKNOWN_COMMAND\n")
-                        except (ConnectionResetError, BrokenPipeError, OSError):
-                            log_message('INFO', f"Consumer disconnected during send", f"{client_info} ({client_uuid})")
-                            break
-                            
-                except socket.timeout:
-                    # Таймаут - это нормально, продолжаем ждать данные
-                    # Обновляем время активности
-                    for module in connected_modules:
-                        if module.get('uuid') == client_uuid:
-                            module['last_activity'] = time.time()
-                            break
-                    continue
-                except (ConnectionResetError, BrokenPipeError, OSError):
-                    log_message('INFO', f"Consumer connection closed by client", f"{client_info} ({client_uuid})")
-                    break
-                except Exception as e:
-                    log_message('ERROR', f"Error processing consumer request: {e}", f"{client_info} ({client_uuid})")
-                    break
-                    
-        else:
-            try:
-                conn.sendall(b"INVALID_INITIAL_MESSAGE\n")
-                log_message('WARNING', f"Invalid initial message from consumer: {data}", client_info)
-            except (ConnectionResetError, BrokenPipeError):
-                log_message('INFO', f"Consumer disconnected during send", client_info)
-    
-    except ConnectionResetError:
-        log_message('WARNING', f"Consumer disconnected abruptly", client_info)
-    except socket.timeout:
-        log_message('WARNING', f"Timeout waiting for consumer data", client_info)
-    except Exception as e:
-        log_message('ERROR', f"Error with consumer: {e}", client_info)  
-    finally:
-        log_message('INFO', f"Consumer disconnected: {client_info}", client_info)
-        
-        # Для потребителей только меняем статус, не удаляем полностью
-        if client_uuid:
-            for module in connected_modules:
-                if module.get('uuid') == client_uuid:
-                    module['status'] = 'disconnected'
-                    module['last_activity'] = time.time()
-                    break
-                    
-        try:
-            conn.close()
-        except:
-            pass
 
 def handle_provider(conn, address):
     """Обработчик для поставщиков (порт 5000)"""
@@ -342,7 +195,7 @@ def handle_provider(conn, address):
         conn.settimeout(30.0)
         
         # Получаем первое сообщение от поставщика
-        data_byte = conn.recv(1024)
+        data_byte = conn.recv(2000)
         if not data_byte:  # Соединение закрыто сразу
             log_message('INFO', f"Provider disconnected immediately", client_info)
             return
@@ -432,7 +285,7 @@ def handle_data_provider(conn, address, initial_bytes_data):
             
             # Get next data packet
             try:
-                data_byte = conn.recv(1024)
+                data_byte = conn.recv(2000)
                 if not data_byte:  # Соединение закрыто
                     log_message('INFO', f"Provider disconnected", client_info)
                     break
@@ -467,33 +320,13 @@ def handle_data_provider(conn, address, initial_bytes_data):
             pass
 
 def save_to_queue(message, timestamp, packet_number):
-    # Если сообщение пришло в HEX формате (от поставщика), преобразуем его
+    # Если сообщение пришло в HEX формате, преобразуем его
     if isinstance(message, bytes):
         hex_message = message.hex()
         message_queue.put((packet_number, hex_message, timestamp))
-        
-        # Update all client queues with this new message
-        for client_uuid in client_queues:
-            client_queues[client_uuid].append((packet_number, hex_message, timestamp))
-            last_packet_sent[client_uuid] = packet_number
     else:
         # Обычное текстовое сообщение
         message_queue.put((packet_number, message, timestamp))
-        
-        # Update all client queues with this new message
-        for client_uuid in client_queues:
-            client_queues[client_uuid].append((packet_number, message, timestamp))
-            last_packet_sent[client_uuid] = packet_number
-
-def get_new_data_for_client(client_uuid):
-    messages = []
-    
-    while client_queues[client_uuid]:
-        packet_number, message, _ = client_queues[client_uuid].popleft()
-        messages.append(f"{message} {packet_number}")  # Формат: "GL123 1.5 42 1"
-    
-    # Всегда добавляем \n в конце, даже если сообщение одно
-    return "\n".join(messages) + "\n" if messages else "NO_DATA\n"
 
 def provider_server_program():
     """Сервер для поставщиков на порту 5000"""
@@ -538,49 +371,6 @@ def provider_server_program():
         server_socket.close()
         log_message('INFO', "Provider server socket closed and port released")
 
-def consumer_server_program():
-    """Сервер для потребителей на порту 5002"""
-    host = socket.gethostname()
-    port = 5002
-    
-    # Создаем socket с опцией REUSEADDR
-    server_socket = socket.socket()
-    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-    try:
-        server_socket.bind((host, port))
-        server_socket.listen()
-        log_message('INFO', f"Consumer server started on {host}:{port}")
-        
-        # Список для хранения активных соединений потребителей
-        consumer_connections = []
-        
-        try:
-            while True:
-                conn, address = server_socket.accept()
-                # Добавляем соединение в список
-                consumer_connections.append(conn)
-
-                consumer_thread = threading.Thread(target=handle_consumer, args=(conn, address))
-                consumer_thread.daemon = True
-                consumer_thread.start()
-                
-        except KeyboardInterrupt:
-            log_message('INFO', "Consumer server shutting down...")
-            
-        finally:
-            # Закрываем все клиентские соединения
-            for conn in consumer_connections:
-                try:
-                    conn.close()
-                except:
-                    pass
-                
-    finally:
-        # Гарантируем закрытие серверного сокета
-        server_socket.close()
-        log_message('INFO', "Consumer server socket closed and port released")
-
 # Flask routes
 @app.route('/')
 def index():
@@ -608,47 +398,14 @@ def get_sent_messages():
 def send_message():
     """API для отправки сообщения модулю"""
     data = request.json
-    module_uuid = data.get('uuid')
     module_address = data.get('address')
     message = data.get('message')
-    message_format = data.get('format', 'text')  # 'text' или 'hex'
     
     if not message:
         return jsonify({'status': 'error', 'message': 'Message is required'})
     
-    # Отправка потребителю (по UUID)
-    if module_uuid and not module_address:
-        if module_uuid not in client_queues:
-            return jsonify({'status': 'error', 'message': 'Consumer module not found'})
-        
-        # Для HEX сообщений проверяем валидность
-        if message_format == 'hex' and not is_valid_hex_string(message):
-            return jsonify({'status': 'error', 'message': 'Invalid HEX string'})
-        
-        # Добавляем сообщение в очередь для указанного модуля
-        timestamp = datetime.now()
-        packet_number = last_packet_sent.get(module_uuid, 0) + 1
-        
-        client_queues[module_uuid].append((packet_number, message, timestamp))
-        last_packet_sent[module_uuid] = packet_number
-        
-        # Логируем отправку
-        sent_entry = {
-            'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-            'to_uuid': module_uuid,
-            'to_address': next((m.get('address') for m in connected_modules if m.get('uuid') == module_uuid), 'unknown'),
-            'message': message,
-            'direction': 'manual_to_consumer',
-            'format': message_format
-        }
-        sent_messages.append(sent_entry)
-        
-        log_message('INFO', f"Manual message sent to consumer: {message}", f"WEB->{module_uuid}")
-        
-        return jsonify({'status': 'success', 'message': 'Message sent to consumer'})
-    
     # Отправка поставщику (по адресу)
-    elif module_address and not module_uuid:
+    if module_address:
         success = send_to_provider(module_address, message)
         if success:
             return jsonify({'status': 'success', 'message': 'Message sent to provider'})
@@ -656,7 +413,7 @@ def send_message():
             return jsonify({'status': 'error', 'message': 'Failed to send message to provider'})
     
     else:
-        return jsonify({'status': 'error', 'message': 'Specify either consumer UUID or provider address'})
+        return jsonify({'status': 'error', 'message': 'Specify provider address'})
 
 @app.route('/api/server_status')
 def get_server_status():
@@ -664,17 +421,14 @@ def get_server_status():
     active_providers = [addr for addr, conn in provider_connections.items() if is_connection_alive(conn)]
     
     # Подсчитываем подключенные модули по типам
-    connected_consumers = len([m for m in connected_modules if m.get('status') == 'connected' and m.get('type') == 'consumer'])
     connected_providers = len([m for m in connected_modules if m.get('status') == 'connected' and m.get('type') == 'provider'])
     
     status = {
-        'connected_consumers': connected_consumers,
         'connected_providers': connected_providers,
-        'total_modules': connected_consumers + connected_providers,
+        'total_modules': connected_providers,
         'active_providers': len(active_providers),
         'total_messages': len(all_messages),
         'sent_messages': len(sent_messages),
-        'client_queues_size': len(client_queues),
         'provider_connections': len(provider_connections),
         'message_queue_size': message_queue.qsize(),
         'server_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -719,12 +473,6 @@ if __name__ == '__main__':
         .send-form input, .send-form select, .send-form button { padding: 8px; }
         .send-form input { flex: 2; }
         .send-form select { flex: 1; }
-        .tab-buttons { display: flex; margin-bottom: 10px; }
-        .tab-button { padding: 10px 20px; background: #f8f9fa; border: 1px solid #ddd; cursor: pointer; }
-        .tab-button.active { background: #007bff; color: white; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .consumer { background-color: #e8f5e8; }
         .provider { background-color: #e8f0ff; }
         .active-connection { font-weight: bold; }
         .port-info { font-size: 0.8em; color: #666; }
@@ -746,37 +494,15 @@ if __name__ == '__main__':
         </div>
         
         <div class="section">
-            <h2>Send Messages</h2>
-            <div class="tab-buttons">
-                <button class="tab-button active" onclick="showTab('consumerTab')">To Consumers</button>
-                <button class="tab-button" onclick="showTab('providerTab')">To Providers</button>
+            <h2>Send Messages to Providers</h2>
+            <div class="send-form">
+                <input type="text" id="providerMessageInput" placeholder="Enter message for provider...">
+                <select id="providerModuleSelect">
+                    <option value="">Select provider...</option>
+                </select>
+                <button onclick="sendToProvider()">Send to Provider</button>
             </div>
-            
-            <div id="consumerTab" class="tab-content active">
-                <div class="send-form">
-                    <input type="text" id="consumerMessageInput" placeholder="Enter message (text or HEX like 1c 2c3c 4c)...">
-                        <select id="consumerModuleSelect">
-                            <option value="">Select consumer...</option>
-                        </select>
-                        <select id="messageFormat">
-                            <option value="text">Text</option>
-                            <option value="hex">HEX</option>
-                        </select>
-                        <button onclick="sendToConsumer()">Send to Consumer</button>
-                </div>
-            </div>
-            
-            <div id="providerTab" class="tab-content">
-                <div class="send-form">
-                    <input type="text" id="providerMessageInput" placeholder="Enter message for provider...">
-                    <select id="providerModuleSelect">
-                        <option value="">Select provider...</option>
-                    </select>
-                    <button onclick="sendToProvider()">Send to Provider</button>
-                </div>
-                <p><small>Note: sending works only for active connected providers</small></p>
-            </div>
-            
+            <p><small>Note: sending works only for active connected providers</small></p>
             <div id="sendStatus"></div>
         </div>
         
@@ -796,35 +522,13 @@ if __name__ == '__main__':
     </div>
 
     <script>
-        let currentTab = 'consumerTab';
-        let selectedConsumer = '';
         let selectedProvider = '';
-        
-        function showTab(tabName) {
-            // Hide all tabs
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            document.querySelectorAll('.tab-button').forEach(button => {
-                button.classList.remove('active');
-            });
-            
-            // Show selected tab
-            document.getElementById(tabName).classList.add('active');
-            event.target.classList.add('active');
-            currentTab = tabName;
-        }
         
         function loadStats() {
             fetch('/api/server_status')
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById('stats').innerHTML = `
-                        <div class="stat-card">
-                            <h3>Connected Consumers</h3>
-                            <p style="font-size: 24px; color: green;">${data.connected_consumers}</p>
-                            <p class="port-info">Port 5002</p>
-                        </div>
                         <div class="stat-card">
                             <h3>Connected Providers</h3>
                             <p style="font-size: 24px; color: purple;">${data.connected_providers}</p>
@@ -849,9 +553,7 @@ if __name__ == '__main__':
         
         function loadConnectedModules() {
             // Save current selected values
-            const consumerSelect = document.getElementById('consumerModuleSelect');
             const providerSelect = document.getElementById('providerModuleSelect');
-            selectedConsumer = consumerSelect.value;
             selectedProvider = providerSelect.value;
             
             fetch('/api/connected_modules')
@@ -861,34 +563,28 @@ if __name__ == '__main__':
                     
                     if (modules.length === 0) {
                         modulesDiv.innerHTML = '<p>No connected modules</p>';
-                        consumerSelect.innerHTML = '<option value="">Select consumer...</option>';
                         providerSelect.innerHTML = '<option value="">Select provider...</option>';
                         return;
                     }
                     
-                    let html = '<table><tr><th>Type</th><th>UUID</th><th>Address</th><th>Port</th><th>Status</th><th>Last Activity</th></tr>';
-                    let consumerOptions = '<option value="">Select consumer...</option>';
+                    let html = '<table><tr><th>Type</th><th>Address</th><th>Port</th><th>Status</th><th>Last Activity</th></tr>';
                     let providerOptions = '<option value="">Select provider...</option>';
                     
                     modules.forEach(module => {
                         const statusClass = module.status === 'connected' ? 'connected' : 'disconnected';
                         const lastActivity = new Date(module.last_activity * 1000).toLocaleString();
-                        const rowClass = module.type === 'consumer' ? 'consumer' : 'provider';
+                        const rowClass = 'provider';
                         const connectionClass = module.status === 'connected' ? 'active-connection' : '';
                         
                         html += `<tr class="${rowClass}">
                             <td>${module.type}</td>
-                            <td class="${connectionClass}">${module.uuid || 'N/A'}</td>
                             <td class="${connectionClass}">${module.address}</td>
                             <td>${module.port}</td>
                             <td class="${statusClass}">${module.status}</td>
                             <td>${lastActivity}</td>
                         </tr>`;
                         
-                        if (module.type === 'consumer' && module.uuid) {
-                            const selected = module.uuid === selectedConsumer ? 'selected' : '';
-                            consumerOptions += `<option value="${module.uuid}" ${selected}>${module.uuid} (${module.address}) - ${module.status}</option>`;
-                        } else if (module.type === 'provider') {
+                        if (module.type === 'provider') {
                             const selected = module.address === selectedProvider ? 'selected' : '';
                             providerOptions += `<option value="${module.address}" ${selected}>${module.address} - ${module.status}</option>`;
                         }
@@ -896,7 +592,6 @@ if __name__ == '__main__':
                     
                     html += '</table>';
                     modulesDiv.innerHTML = html;
-                    consumerSelect.innerHTML = consumerOptions;
                     providerSelect.innerHTML = providerOptions;
                 });
         }
@@ -915,13 +610,10 @@ if __name__ == '__main__':
                     let html = '';
                     messages.slice().reverse().forEach(msg => {
                         const direction = msg.direction || 'outgoing';
-                        const directionText = direction === 'manual_to_provider' ? 'MANUAL->PROVIDER' : 
-                                            direction === 'manual_to_consumer' ? 'MANUAL->CONSUMER' : 
-                                            direction === 'manual' ? 'MANUAL' : 'AUTOMATIC';
+                        const directionText = direction === 'manual_to_provider' ? 'MANUAL->PROVIDER' : 'AUTOMATIC';
                         
                         html += `<div class="log-entry">
                             <strong>[${msg.timestamp}]</strong> 
-                            ${msg.to_uuid ? `UUID: ${msg.to_uuid}` : ''}
                             ${msg.to_address ? `ADDRESS: ${msg.to_address}` : ''}
                             <strong>${msg.message}</strong>
                             <em>(${directionText})</em>
@@ -958,35 +650,6 @@ if __name__ == '__main__':
                     
                     allMessagesDiv.innerHTML = html;
                 });
-        }
-        
-        function sendToConsumer() {
-            const message = document.getElementById('consumerMessageInput').value;
-            const uuid = document.getElementById('consumerModuleSelect').value;
-            const format = document.getElementById('messageFormat').value;
-
-            if (!message || !uuid) {
-                document.getElementById('sendStatus').innerHTML = '<p style="color: red;">Fill all fields</p>';
-                return;
-            }
-
-            fetch('/api/send_message', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ uuid: uuid, message: message, format: format })
-            })
-            .then(response => response.json())
-            .then(result => {
-                const statusDiv = document.getElementById('sendStatus');
-                if (result.status === 'success') {
-                    statusDiv.innerHTML = '<p style="color: green;">Message sent to consumer</p>';
-                    document.getElementById('consumerMessageInput').value = '';
-                    loadSentMessages();
-                    loadAllMessages();
-                } else {
-                    statusDiv.innerHTML = `<p style="color: red;">Error: ${result.message}</p>`;
-                }
-            });
         }
         
         function sendToProvider() {
@@ -1038,10 +701,6 @@ if __name__ == '__main__':
     provider_thread = threading.Thread(target=provider_server_program)
     provider_thread.daemon = True
     provider_thread.start()
-
-    consumer_thread = threading.Thread(target=consumer_server_program)
-    consumer_thread.daemon = True
-    consumer_thread.start()
 
     # Даем серверам время на запуск
     time.sleep(1)
