@@ -14,4 +14,4 @@ def register_handlers():
     
     # Обработчики уже задекорированы @socketio.on в исходных файлах
     # При импорте они автоматически регистрируются
-    print("✅ WebSocket handlers registered")
+    print("WebSocket handlers registered")

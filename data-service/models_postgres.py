@@ -12,24 +12,24 @@ import atexit
 import threading
 import math
 
+logging.basicConfig(
+    level=getattr(logging, "INFO"),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('/app/logs/data_service.log'),
+        logging.StreamHandler()
+    ]
+)
+
 class PostgreSQLExecutor:
     def __init__(self, db_url: str, min_conn: int = 1, max_conn: int = 20):
         self.db_url = db_url
         self.min_conn = min_conn
         self.max_conn = max_conn
         self.connection_pool = None
-        self.logger = self._setup_logger()
+        self.logger = logging.getLogger('PostgreSQLExecutor')
         self._initialize_pool()
         atexit.register(self.close_pool)
-
-    def _setup_logger(self):
-        logger = logging.getLogger('PostgreSQLExecutor')
-        logger.setLevel(logging.INFO)
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        return logger
 
     def _initialize_pool(self):
         """Инициализация пула соединений PostgreSQL"""
@@ -162,7 +162,7 @@ class PostgreSQLDatabaseManager:
         self.db = PostgreSQLExecutor(db_url)
         self.last_session = 0
         self._lock = threading.Lock()
-        self.logger = self._setup_logger()
+        self.logger = logging.getLogger("PostgreSQLDatabaseManager")
         
         tables = self.check_required_tables()
         if len(tables) != 0:
@@ -177,25 +177,16 @@ class PostgreSQLDatabaseManager:
         try:
             from database_models import init_user_tables
             init_user_tables(self)
-            self.logger.info("✅ User tables initialized successfully")
+            self.logger.info("User tables initialized successfully")
         except Exception as e:
-            self.logger.error(f"❌ Error initializing user tables: {str(e)}")
+            self.logger.error(f"Error initializing user tables: {str(e)}")
             raise
-
-    def _setup_logger(self):
-        logger = logging.getLogger('PostgreSQLModels')
-        logger.setLevel(logging.INFO)
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        return logger
     
     def check_tables_exist(self, table_names):
         """Проверка существования таблиц в БД"""
         missing_tables = []
         existing_tables = []
-        
+
         try:            
             # Запрос для проверки существования таблиц
             query = """
@@ -204,22 +195,24 @@ class PostgreSQLDatabaseManager:
             WHERE table_schema = 'public' 
             AND table_name = ANY(%s)
             """
-            
-            existing_tables = self.db.execute(query, (table_names,), True)
-            
+
+            result = self.db.execute(query, (table_names,), fetch=True)
+
+            # ИСПРАВЛЕНИЕ: result - это список словарей, а не один словарь
+            existing_table_names = [row['table_name'] for row in result] if result else []
+
             # Находим отсутствующие таблицы
-            missing_tables = [table for table in table_names if table not in existing_tables['table_name']]
-            
-            
-            self.logger.info(f"Table check: existing={existing_tables}, missing={missing_tables}")
-            
+            missing_tables = [table for table in table_names if table not in existing_table_names]
+
+            self.logger.info(f"Table check: existing={existing_table_names}, missing={missing_tables}")
+
             return {
                 'all_tables_exist': len(missing_tables) == 0,
-                'existing_tables': existing_tables,
+                'existing_tables': existing_table_names,
                 'missing_tables': missing_tables,
                 'checked_tables': table_names
             }
-            
+
         except Exception as e:
             self.logger.error(f"Error checking tables: {str(e)}")
             return {
@@ -301,37 +294,42 @@ class PostgreSQLDatabaseManager:
             try:
                 self.db.execute(query)
             except Exception as e:
-                logging.error(f"Error executing init query: {e}")
+                self.logger.error(f"Error executing init query: {e}")
 
     def save_structured_data_batch(self, data: dict, session_id: int) -> Optional[dict]:
-        """Публичный метод для сохранения структурированных данных батчем в ОДНОЙ транзакции"""
+        """Публичный метод для сохранения структурированных данных батчем"""
         try:
             hops = data.get('hops', [])
-            self.logger.info(f"🔄 Starting batch save for {len(hops)} hops, session {session_id}")
-
+            self.logger.info(f"Starting batch save for {len(hops)} hops, session {session_id}")
+    
             if not hops:
                 self.logger.warning("No hops to save")
                 return None
-
+    
             # ВСЕ операции в ОДНОЙ транзакции
-            with self.db.get_cursor() as cursor:
+            with self.db.get_cursor() as cursor:  # ← cursor определяется здесь!
                 # Подготавливаем данные
                 module_ids = set()
                 batch_data = []
+                
+                # Логируем ВСЕ module_num перед фильтрацией
+                all_module_nums = [hop.get('module_num', 0) for hop in hops]
+                self.logger.info(f"ALL module_nums before processing: {all_module_nums}")
+    
                 datetime_str = data.get('timestamp', datetime.now().isoformat())
                 datetime_obj = datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
                 datetime_unix = int(datetime_obj.timestamp())
                 packet_number = data.get('packet_number', 1)
-
-                for hop in hops:
+    
+                for i, hop in enumerate(hops):
                     module_id = hop.get('module_num', 0)
-                    if module_id > 0:
+                    if module_id >= 0:  # ← ВАЖНО: фильтруем здесь!
                         module_ids.add(module_id)
                         lat = hop.get('lat', 0)
                         lon = hop.get('lng', 0)
                         alt = hop.get('altitude', 0)
                         gps_ok = lat != 0 and lon != 0
-
+    
                         batch_data.append((
                             module_id, session_id, 0,
                             datetime_str, datetime_unix,
@@ -340,49 +338,51 @@ class PostgreSQLDatabaseManager:
                             alt, gps_ok, packet_number,
                             None, None, None, None
                         ))
-
-                self.logger.info(f"📦 Prepared {len(batch_data)} records from {len(module_ids)} unique modules")
-
+                        
+                        self.logger.debug(f"Hop {i}: module_id={module_id}, lat={lat}, lon={lon}, gps_ok={gps_ok}")
+    
+                self.logger.info(f"Prepared {len(batch_data)} records from {len(module_ids)} unique modules: {sorted(module_ids)}")
+    
                 if not batch_data:
                     self.logger.warning("No valid batch data to save")
                     return None
-
+    
                 # 1. Обеспечиваем существование модулей
                 self.logger.info(f"Ensuring {len(module_ids)} modules exist")
                 self._ensure_modules_exist_batch_in_transaction(cursor, module_ids)
-
+    
                 # 2. Батчевая вставка
                 self.logger.info(f"Executing batch insert for {len(batch_data)} records")
                 inserted_ids = self._batch_insert_data_in_transaction(cursor, batch_data)
-
-                self.logger.info(f"Batch insert result: {len(inserted_ids)} inserted IDs: {inserted_ids}")
-
+    
+                self.logger.info(f"Batch insert result: {len(inserted_ids)} inserted IDs")
+    
                 if not inserted_ids:
                     self.logger.error("No records were inserted")
                     return None
-
+    
                 # 3. Получаем полные данные В ТОЙ ЖЕ ТРАНЗАКЦИИ
                 self.logger.info("Fetching full data for inserted records")
                 saved_records = self._get_full_data_batch_in_transaction(cursor, inserted_ids)
-
+    
                 if not saved_records:
-                    self.logger.error("❌ Failed to retrieve saved records from database")
+                    self.logger.error("Failed to retrieve saved records from database")
                     return None
-
+    
                 # Формируем результат
                 result_data = data.copy()
                 result_data['saved_hops'] = saved_records
                 result_data['db_save_time'] = datetime.now().isoformat()
-
-                self.logger.info(f"✅ Successfully saved and retrieved {len(saved_records)} records in single transaction")
-                return result_data
-
-        except Exception as e:
-            self.logger.error(f"❌ Batch save error: {e}")
-            import traceback
-            self.logger.error(f"❌ Traceback: {traceback.format_exc()}")
-            return None
     
+                self.logger.info(f"Successfully saved and retrieved {len(saved_records)} records in single transaction")
+                return result_data
+    
+        except Exception as e:
+                self.logger.error(f"Batch save error: {e}")
+                import traceback
+                self.logger.error(f"Traceback: {traceback.format_exc()}")
+                return None
+
     def _get_full_data_batch_in_transaction(self, cursor, data_ids: list) -> list:
         """Получение полных данных в ТОЙ ЖЕ транзакции"""
         try:
@@ -452,11 +452,11 @@ class PostgreSQLDatabaseManager:
                     self.logger.error(f"Error formatting record {data.get('id', 'unknown')}: {e}")
                     continue
                 
-            self.logger.info(f"✅ Successfully formatted {len(result)} records")
+            self.logger.info(f"Successfully formatted {len(result)} records")
             return result
             
         except Exception as e:
-            self.logger.error(f"❌ Error getting full data batch: {e}")
+            self.logger.error(f"Error getting full data batch: {e}")
             return []
     
     def _batch_insert_data_in_transaction(self, cursor, batch_data: list) -> list:
@@ -486,11 +486,11 @@ class PostgreSQLDatabaseManager:
                     self.logger.error(f"Problematic record: {record}")
                     raise
                 
-            self.logger.info(f"✅ Successfully inserted {len(inserted_ids)} records")
+            self.logger.info(f"Successfully inserted {len(inserted_ids)} records")
             return inserted_ids
 
         except Exception as e:
-            self.logger.error(f"❌ Batch insert failed: {e}")
+            self.logger.error(f"Batch insert failed: {e}")
             return []
 
     def _ensure_modules_exist_batch_in_transaction(self, cursor, module_ids: set):
@@ -573,11 +573,11 @@ class PostgreSQLDatabaseManager:
                     self.logger.error(f"Problematic record: {record}")
                     raise  # В транзакции - если одна запись падает, падают все
                 
-            self.logger.info(f"✅ Successfully inserted {len(inserted_ids)} records")
+            self.logger.info(f"Successfully inserted {len(inserted_ids)} records")
             return inserted_ids
 
         except Exception as e:
-            self.logger.error(f"❌ Batch insert failed: {e}")
+            self.logger.error(f"Batch insert failed: {e}")
             return []
 
     def _get_full_data_batch(self, data_ids: list) -> list:
@@ -651,13 +651,13 @@ class PostgreSQLDatabaseManager:
                     self.logger.error(f"Problematic record: {data}")
                     continue
                 
-            self.logger.info(f"✅ Successfully formatted {len(result)} records")
+            self.logger.info(f"Successfully formatted {len(result)} records")
             return result
             
         except Exception as e:
-            self.logger.error(f"❌ Error getting full data batch: {e}")
+            self.logger.error(f"Error getting full data batch: {e}")
             import traceback
-            self.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             return []
     
     def hide_session(self, session_id: int) -> bool:
@@ -674,7 +674,7 @@ class PostgreSQLDatabaseManager:
             )
             return affected > 0
         except Exception as e:
-            logging.error(f"Ошибка при скрытии сессии {session_id}: {e}")
+            self.logger.error(f"Ошибка при скрытии сессии {session_id}: {e}")
             return False
 
     def unhide_session(self, session_id: int) -> bool:
@@ -691,7 +691,7 @@ class PostgreSQLDatabaseManager:
             )
             return affected > 0
         except Exception as e:
-            logging.error(f"Ошибка при восстановлении сессии {session_id}: {e}")
+            self.logger.error(f"Ошибка при восстановлении сессии {session_id}: {e}")
             return False
 
     def delete_session_permanently(self, session_id: int) -> bool:
@@ -708,7 +708,7 @@ class PostgreSQLDatabaseManager:
             )
             return affected > 0
         except Exception as e:
-            logging.error(f"Ошибка при удалении сессии {session_id}: {e}")
+            self.logger.error(f"Ошибка при удалении сессии {session_id}: {e}")
             return False
 
     def parse_and_store_data(self, data_string: str, session_id: Optional[int] = None, 
@@ -722,13 +722,13 @@ class PostgreSQLDatabaseManager:
         :param datetime_now: опциональное время записи
         :return: Словарь с результатом или False при ошибке
         """
-        logging.debug(f"Parsing data: {data_string}")
+        self.logger.debug(f"Parsing data: {data_string}")
         
         with self._lock:
             try:
                 parts = data_string.split()
                 if len(parts) < 6:
-                    logging.error(f"Недостаточно данных в строке: {data_string}")
+                    self.logger.error(f"Недостаточно данных в строке: {data_string}")
                     return False
 
                 # Инициализация переменных
@@ -778,7 +778,7 @@ class PostgreSQLDatabaseManager:
                             jumps = int(jumps_str) if jumps_str else None
 
                 else:
-                    logging.warning(f"Неизвестный формат данных: {len(parts)} частей")
+                    self.logger.warning(f"Неизвестный формат данных: {len(parts)} частей")
                     # Попытка парсинга в общем формате
                     try:
                         message_type_code = self._parse_message_type(parts[0])
@@ -788,18 +788,18 @@ class PostgreSQLDatabaseManager:
                         if len(parts) >= 6:
                             message_number = int(parts[-1])  # Последний элемент как номер сообщения
                     except (ValueError, IndexError) as e:
-                        logging.error(f"Ошибка парсинга общего формата: {e}")
+                        self.logger.error(f"Ошибка парсинга общего формата: {e}")
                         return False
 
                 # Получаем или создаем сессию
                 id_session = self._get_or_create_session(session_id, session_name)
                 if not id_session:
-                    logging.error("Не удалось получить или создать сессию")
+                    self.logger.error("Не удалось получить или создать сессию")
                     return False
 
                 # Обеспечиваем существование модуля
                 self._ensure_module_exists(module_id)
-                logging.info(f"Добавлены данные в сессию: {id_session}")
+                self.logger.info(f"Добавлены данные в сессию: {id_session}")
 
                 # Обработка GPS данных
                 gps_ok, lat_val, lon_val, alt_val = self._parse_gps_data(lat, lon, alt)
@@ -828,19 +828,19 @@ class PostgreSQLDatabaseManager:
                 )
 
                 if not data_id:
-                    logging.error("Не удалось сохранить данные")
+                    self.logger.error("Не удалось сохранить данные")
                     return False
 
                 # Получаем полные данные для возврата
                 result = self._get_data_by_id(data_id)
                 if not result:
-                    logging.error("Не удалось получить сохраненные данные")
+                    self.logger.error("Не удалось получить сохраненные данные")
                     return False
 
                 return result
 
             except Exception as e:
-                logging.error(f"Критическая ошибка при обработке данных: {e}\nСтрока: {data_string}")
+                self.logger.error(f"Критическая ошибка при обработке данных: {e}\nСтрока: {data_string}")
                 return False
 
     def _parse_message_type(self, type_str: str) -> int:
@@ -891,7 +891,7 @@ class PostgreSQLDatabaseManager:
             )
             return result['id'] if result else None
         except Exception as e:
-            logging.error(f"Ошибка при вставке данных: {e}")
+            self.logger.error(f"Ошибка при вставке данных: {e}")
             return None
 
     def _get_data_by_id(self, data_id: int) -> Optional[Dict]:
@@ -946,7 +946,7 @@ class PostgreSQLDatabaseManager:
             }
             
         except Exception as e:
-            logging.error(f"Ошибка при получении данных по ID {data_id}: {e}")
+            self.logger.error(f"Ошибка при получении данных по ID {data_id}: {e}")
             return None
 
     def _get_session_by_id(self, session_id: int) -> Optional[Dict]:
@@ -985,14 +985,14 @@ class PostgreSQLDatabaseManager:
                 
             except Exception as e:
                 if "duplicate key value violates unique constraint" in str(e) and attempt < max_retries - 1:
-                    logging.warning(f"Обнаружен конфликт ID, сбрасываю последовательность...")
+                    self.logger.warning(f"Обнаружен конфликт ID, сбрасываю последовательность...")
                     # Сбрасываем sequence на актуальное значение
                     self.db.execute(
                         "SELECT setval('sessions_id_seq', (SELECT COALESCE(MAX(id), 0) FROM sessions))"
                     )
                     continue
                 else:
-                    logging.error(f"Ошибка при создании сессии: {e}")
+                    self.logger.error(f"Ошибка при создании сессии: {e}")
                     return None
                
     def _get_or_create_session(self, id_session: Optional[int] = None, 
@@ -1002,7 +1002,7 @@ class PostgreSQLDatabaseManager:
             print("ID session: ", id_session)
             session = self._get_session_by_id(id_session)
             if session:
-                logging.info(f"Найдена сессия: {session['id']}")
+                self.logger.info(f"Найдена сессия: {session['id']}")
                 return session['id']
 
         # Создание новой сессии
@@ -1030,7 +1030,7 @@ class PostgreSQLDatabaseManager:
                 "INSERT INTO modules (id, name, color) VALUES (%s, %s, %s) ON CONFLICT (id) DO NOTHING",
                 params=(module_id, name, color)
             )
-            logging.info(f"Создан новый модуль: {module_id}")
+            self.logger.info(f"Создан новый модуль: {module_id}")
 
     def _generate_contrasting_color(self, module_id: int) -> str:
         """Генерация контрастного цвета на основе ID модуля"""
@@ -1068,7 +1068,7 @@ class PostgreSQLDatabaseManager:
             affected = self.db.execute(query, batch=data_list)
             return affected or 0
         except Exception as e:
-            logging.error(f"Ошибка при пакетной вставке: {e}")
+            self.logger.error(f"Ошибка при пакетной вставке: {e}")
             return 0
 
     # Data retrieval methods
@@ -1714,7 +1714,7 @@ class PostgreSQLDatabaseManager:
                 
         except Exception as e:
             error_message = f"Ошибка при добавлении тестовых данных FFFF: {e}"
-            logging.error(error_message)
+            self.logger.error(error_message)
             return {
                 'status': "error",
                 'message': error_message,
@@ -1738,7 +1738,7 @@ class PostgreSQLDatabaseManager:
             )
             return affected or 0
         except Exception as e:
-            logging.error(f"Ошибка при очистке старых данных: {e}")
+            self.logger.error(f"Ошибка при очистке старых данных: {e}")
             return 0
 
     def get_database_stats(self) -> Dict[str, Any]:
@@ -1762,17 +1762,6 @@ class PostgreSQLDatabaseManager:
                     key = list(result.keys())[0]
                     results[key] = list(result.values())[0]
             except Exception as e:
-                logging.error(f"Ошибка при получении статистики: {e}")
+                self.logger.error(f"Ошибка при получении статистики: {e}")
         
         return results
-
-# Глобальный экземпляр для использования в приложении
-_postgres_manager = None
-
-def get_postgres_manager() -> PostgreSQLDatabaseManager:
-    """Получение глобального экземпляра менеджера БД"""
-    global _postgres_manager
-    if _postgres_manager is None:
-        _postgres_manager = PostgreSQLDatabaseManager()
-        # _postgres_manager.init_database()
-    return _postgres_manager

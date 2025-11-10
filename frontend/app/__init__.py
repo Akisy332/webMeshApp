@@ -27,9 +27,9 @@ def initialize_redis_bridge():
             from .redis_websocket_bridge import RedisWebSocketBridge
             redis_bridge = RedisWebSocketBridge(socketio)
             redis_bridge.start()
-            logger.info("✅ Redis-WebSocket bridge initialized")
+            logger.info("Redis-WebSocket bridge initialized")
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Redis bridge: {e}")
+            logger.error(f"Failed to initialize Redis bridge: {e}")
 
 @app.before_request
 def before_first_request():

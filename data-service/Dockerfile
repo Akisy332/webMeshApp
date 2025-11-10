@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Создаем директорию для логов
+RUN mkdir -p /app/logs
+    
 # Копирование requirements и установка Python зависимостей
 COPY data-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

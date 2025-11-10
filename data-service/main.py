@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 import requests
 import logging
 from typing import List, Optional, Dict, Any
@@ -10,12 +11,73 @@ import math
 import os
 import sys
 
-from models_postgres import get_postgres_manager
+from config import settings
+
+from models_postgres import PostgreSQLDatabaseManager
+from redis_subscriber import RedisSubscriber
+
+# Глобальные переменные
+db_manager: Optional[PostgreSQLDatabaseManager] = None
+redis_subscriber: Optional[RedisSubscriber] = None
+logger = logging.getLogger("data-service")
+
+# Хелперы
+def get_db_manager() -> PostgreSQLDatabaseManager:
+    """Безопасное получение менеджера БД"""
+    if db_manager is None:
+        logger.error("Database manager accessed before initialization")
+        raise HTTPException(status_code=500, detail="Database service not available")
+    return db_manager
+
+def get_redis_subscriber() -> RedisSubscriber:
+    """Безопасное получение Redis подписчика"""
+    if redis_subscriber is None:
+        logger.error("Redis subscriber accessed before initialization")
+        raise HTTPException(status_code=500, detail="Redis service not available")
+    return redis_subscriber
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Код при старте сервера
+    global db_manager, redis_subscriber, logger 
+
+    # Иницилизация менеджера БД
+    db_manager = PostgreSQLDatabaseManager()
+    logger.info(f"Main.py DB Manager instance: {id(db_manager)}")
+        
+    # Иницилизация подписчика Redis
+    redis_subscriber = RedisSubscriber(db_manager)
+    logger.info(f"RedisSubscriber instance: {id(redis_subscriber)}")
+    
+    # Проверка подключения к Redis
+    if not redis_subscriber.redis_client:
+        logger.error("REDIS CLIENT IS NONE!")
+    elif not redis_subscriber.redis_client.is_connected():
+        logger.error("REDIS CLIENT NOT CONNECTED!")
+    else:
+        logger.info("Redis client is connected")
+    
+    # Запуск подписчика Redis 
+    redis_subscriber.start()
+    logger.info("Redis subscriber started")
+    
+    logger.info(f"Application started! PID: {os.getpid()}")
+    
+    yield
+    
+    # Код при отключении сервера
+    logger.info("Shutting down application...")
+    if redis_subscriber:
+        redis_subscriber.stop()
+        logger.info("Redis subscriber stopped")
+    
+    logger.info("Application shutdown complete")
 
 app = FastAPI(
     title="Data Service API",
     description="Unified data service for all database operations",
-    version="1.0.0"
+    version="1.1.0",
+    lifespan=lifespan
 )
 
 # CORS middleware
@@ -26,9 +88,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Database manager
-db_manager = get_postgres_manager()
 
 @app.get("/health")
 async def health_check():
@@ -44,7 +103,7 @@ from shared.auth_models import PasswordChangeRequest
 async def create_user(user: UserCreate):
     """Создание нового пользователя"""
     try:
-        logging.info(f"User creation attempt: {user.username}")
+        logger.info(f"User creation attempt: {user.username}")
         
         user_data = {
             'email': user.email,
@@ -53,8 +112,10 @@ async def create_user(user: UserCreate):
             'role': user.role
         }
         
+        current_db = get_db_manager()
+        
         from user_crud import create_user_db
-        db_user = create_user_db(db_manager, user_data)
+        db_user = create_user_db(current_db, user_data)
         if db_user is None:
             raise HTTPException(
                 status_code=400,
@@ -66,7 +127,7 @@ async def create_user(user: UserCreate):
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"User creation error for {user.username}: {str(e)}")
+        logger.error(f"User creation error for {user.username}: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Internal server error during user creation"
@@ -77,8 +138,10 @@ async def create_user(user: UserCreate):
 async def init_first_admin():
     """Инициализация первого администратора (публичный эндпоинт)"""
     try:
+        current_db = get_db_manager()
+        
         # Проверяем, есть ли уже администраторы в системе
-        admin_count = db_manager.db.execute(
+        admin_count = current_db.db.execute(
             "SELECT COUNT(*) as count FROM users WHERE role IN ('admin', 'developer')",
             fetch_one=True
         )
@@ -97,20 +160,20 @@ async def init_first_admin():
         }
         
         from user_crud import create_user_db
-        db_user = create_user_db(db_manager, admin_user)
+        db_user = create_user_db(current_db, admin_user)
         if db_user is None:
             raise HTTPException(
                 status_code=400,
                 detail="Email or username already registered"
             )
         
-        logging.info(f"First admin user created: {db_user['username']}")
+        logger.info(f"First admin user created: {db_user['username']}")
         return {"message": "First administrator created successfully", "user": db_user}
         
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error creating first admin: {str(e)}")
+        logger.error(f"Error creating first admin: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Internal server error during admin creation"
@@ -121,8 +184,10 @@ async def init_first_admin():
 async def get_user(user_id: int):
     """Получение пользователя по ID"""
     try:
+        current_db = get_db_manager()
+        
         from user_crud import get_user_by_id_db
-        user = get_user_by_id_db(db_manager, user_id)
+        user = get_user_by_id_db(current_db, user_id)
         if not user:
             raise HTTPException(
                 status_code=404,
@@ -132,7 +197,7 @@ async def get_user(user_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error getting user {user_id}: {str(e)}")
+        logger.error(f"Error getting user {user_id}: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Internal server error"
@@ -142,8 +207,10 @@ async def get_user(user_id: int):
 async def get_user_by_username(username: str):
     """Получение пользователя по username"""
     try:
+        current_db = get_db_manager()
+        
         from user_crud import get_user_by_username
-        user = get_user_by_username(db_manager, username)
+        user = get_user_by_username(current_db, username)
         if not user:
             raise HTTPException(
                 status_code=404,
@@ -153,7 +220,7 @@ async def get_user_by_username(username: str):
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error getting user {username}: {str(e)}")
+        logger.error(f"Error getting user {username}: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Internal server error"
@@ -166,8 +233,10 @@ async def update_user(
 ):
     """Обновление информации о пользователе"""
     try:
+        current_db = get_db_manager()
+        
         from user_crud import update_user_db
-        updated_user = update_user_db(db_manager, user_id, user_update.dict(exclude_unset=True))
+        updated_user = update_user_db(current_db, user_id, user_update.dict(exclude_unset=True))
         if not updated_user:
             raise HTTPException(
                 status_code=404,
@@ -179,7 +248,7 @@ async def update_user(
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error updating user {user_id}: {str(e)}")
+        logger.error(f"Error updating user {user_id}: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Internal server error during user update"
@@ -192,8 +261,10 @@ async def change_password(
 ):
     """Смена пароля пользователя"""
     try:
+        current_db = get_db_manager()
+        
         from user_crud import change_password_db
-        success = change_password_db(db_manager, user_id, password_data.old_password, password_data.new_password)
+        success = change_password_db(current_db, user_id, password_data.old_password, password_data.new_password)
         if not success:
             raise HTTPException(
                 status_code=400,
@@ -205,7 +276,7 @@ async def change_password(
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error changing password for user {user_id}: {str(e)}")
+        logger.error(f"Error changing password for user {user_id}: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Internal server error during password change"
@@ -218,21 +289,23 @@ async def update_user_role(
 ):
     """Обновление роли пользователя"""
     try:
+        current_db = get_db_manager()
+        
         from user_crud import update_user_role_db
-        updated_user = update_user_role_db(db_manager, user_id, role_update.role)
+        updated_user = update_user_role_db(current_db, user_id, role_update.role)
         if not updated_user:
             raise HTTPException(
                 status_code=404,
                 detail="User not found"
             )
         
-        logging.info(f"User {updated_user['username']} role updated to {role_update.role.value}")
+        logger.info(f"User {updated_user['username']} role updated to {role_update.role.value}")
         return UserResponse(**updated_user)
         
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error updating user role: {str(e)}")
+        logger.error(f"Error updating user role: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Internal server error"
@@ -246,14 +319,16 @@ async def get_users_by_role(
 ):
     """Получение пользователей по роли"""
     try:
+        current_db = get_db_manager()
+        
         from user_crud import get_users_by_role_db
-        users = get_users_by_role_db(db_manager, role, skip, limit)
+        users = get_users_by_role_db(current_db, role, skip, limit)
         return [UserResponse(**user) for user in users]
         
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error getting users by role {role}: {str(e)}")
+        logger.error(f"Error getting users by role {role}: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Internal server error"
@@ -266,20 +341,20 @@ async def get_users(
 ):
     """Получение списка пользователей"""
     try:
+        current_db = get_db_manager()
+        
         from user_crud import get_users_list_db
-        users = get_users_list_db(db_manager, skip, limit)
+        users = get_users_list_db(current_db, skip, limit)
         return [UserResponse(**user) for user in users]
         
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error getting users list: {str(e)}")
+        logger.error(f"Error getting users list: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Internal server error"
         )
-
-
 
 # ==================== SESSIONS ENDPOINTS ====================
 
@@ -287,7 +362,9 @@ async def get_users(
 async def get_sessions():
     """Получение списка всех сессий"""
     try:
-        sessions = db_manager.get_all_sessions()
+        current_db = get_db_manager()
+        
+        sessions = current_db.get_all_sessions()
         return sessions
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -299,12 +376,14 @@ async def create_session(session_data: dict):
         if not session_data or 'name' not in session_data:
             raise HTTPException(status_code=400, detail="Необходимо указать название сессии")
         
-        session_id = db_manager._get_or_create_session(None, session_data['name'], session_data.get('description', ''))
+        current_db = get_db_manager()
+        
+        session_id = current_db._get_or_create_session(None, session_data['name'], session_data.get('description', ''))
         
         if not session_id:
             raise HTTPException(status_code=500, detail="Не удалось создать сессию")
             
-        session_data_result = db_manager._get_session_by_id(session_id)
+        session_data_result = current_db._get_session_by_id(session_id)
         
         new_session = {
             'id': session_id,
@@ -322,9 +401,11 @@ async def create_session(session_data: dict):
 async def get_session_data(session_id: int):
     """Получение данных конкретной сессии"""
     try:
+        current_db = get_db_manager()
+        
         data = {}
-        data["modules"] = db_manager.get_last_message(session_id)
-        data["map"] = db_manager.get_session_map_view(session_id)
+        data["modules"] = current_db.get_last_message(session_id)
+        data["map"] = current_db.get_session_map_view(session_id)
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -333,7 +414,9 @@ async def get_session_data(session_id: int):
 async def delete_session(session_id: int):
     """Удалить сессию"""
     try:
-        if not db_manager.hide_session(session_id):
+        current_db = get_db_manager()
+        
+        if not current_db.hide_session(session_id):
             raise HTTPException(status_code=404, detail="Сессия не найдена")
         
         return {"message": "Сессия удалена"}
@@ -344,7 +427,9 @@ async def delete_session(session_id: int):
 async def get_session_center_radius(session_id: int):
     """Получение данных конкретной сессии"""
     try:
-        data = db_manager.get_session_map_view(session_id)
+        current_db = get_db_manager()
+        
+        data = current_db.get_session_map_view(session_id)
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -430,7 +515,9 @@ async def get_users_table(
             if offset < 0:
                 offset = 0
                 
-        data, total_count, modules_count = db_manager.get_session_data(
+        current_db = get_db_manager()        
+                
+        data, total_count, modules_count = current_db.get_session_data(
             session_id=session_id,
             module_ids=module_ids,
             limit=limit,
@@ -476,8 +563,10 @@ async def get_users_datetime(
         
         if datetime_unix <= 0 or limit <= 0 or limit > 500:
             raise HTTPException(status_code=400, detail='Invalid parameters')
+        
+        current_db = get_db_manager()     
                 
-        data, total_count, modules_count, position = db_manager.get_session_data_centered_on_time(
+        data, total_count, modules_count, position = current_db.get_session_data_centered_on_time(
             session_id=session_id,
             module_ids=module_ids,
             limit=limit,
@@ -517,7 +606,8 @@ async def get_trace_module(
 ):
     """Получение трека модуля"""
     try:
-        data = db_manager.get_module_coordinates(int(id_module, 16), id_session, id_message_type)
+        current_db = get_db_manager()   
+        data = current_db.get_module_coordinates(int(id_module, 16), id_session, id_message_type)
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -526,7 +616,8 @@ async def get_trace_module(
 async def get_modules():
     """Получение всех модулей"""
     try:
-        modules = db_manager.get_all_modules()
+        current_db = get_db_manager()   
+        modules = current_db.get_all_modules()
         return modules
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -538,7 +629,8 @@ async def get_module_stats(
 ):
     """Получение статистики по модулю"""
     try:
-        stats = db_manager.get_module_statistics(module_id, session_id)
+        current_db = get_db_manager()  
+        stats = current_db.get_module_statistics(module_id, session_id)
         return stats
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -550,7 +642,8 @@ async def search_modules(q: str = Query(..., description="Search term")):
         if not q:
             return []
         
-        results = db_manager.search_modules(q)
+        current_db = get_db_manager()  
+        results = current_db.search_modules(q)
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -561,7 +654,8 @@ async def search_modules(q: str = Query(..., description="Search term")):
 async def get_data(limit: int = Query(1000)):
     """Получение всех данных"""
     try:
-        data = db_manager.get_all_data(limit)
+        current_db = get_db_manager()  
+        data = current_db.get_all_data(limit)
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -570,7 +664,8 @@ async def get_data(limit: int = Query(1000)):
 async def get_database_stats():
     """Получение статистики базы данных"""
     try:
-        stats = db_manager.get_database_stats()
+        current_db = get_db_manager()  
+        stats = current_db.get_database_stats()
         return stats
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -582,7 +677,7 @@ async def migrate_sqlite_to_postgres():
         # Импортируем и запускаем миграцию
         from migrate_sqlite_to_postgres import migrate_data, verify_migration
         
-        logging.info("Starting SQLite to PostgreSQL migration...")
+        logger.info("Starting SQLite to PostgreSQL migration...")
         
         if migrate_data():
             verify_migration()
@@ -591,7 +686,7 @@ async def migrate_sqlite_to_postgres():
             raise HTTPException(status_code=500, detail="Migration failed")
             
     except Exception as e:
-        logging.error(f"Migration error: {e}")
+        logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/data/parse")
@@ -602,7 +697,8 @@ async def parse_and_store_data(
 ):
     """Парсинг и сохранение данных"""
     try:
-        result = db_manager.parse_and_store_data(data_string, session_id, session_name)
+        current_db = get_db_manager()  
+        result = current_db.parse_and_store_data(data_string, session_id, session_name)
         if not result:
             raise HTTPException(status_code=400, detail="Failed to parse and store data")
         return result
@@ -614,76 +710,79 @@ import urllib.parse
 
 @app.api_route("/api/database/upload", methods=["GET", "POST"])
 async def upload_file(request: Request):
-    """Комбинированный GET/POST метод для загрузки файла (аналог Flask)"""
+    return None
+    # """Комбинированный GET/POST метод для загрузки файла (аналог Flask)"""
     
-    if request.method == "POST":
-        form_data = await request.form()
-        file = form_data.get("file")
-        session_name = form_data.get("session_name", "default_session")
+    # if request.method == "POST":
+    #     form_data = await request.form()
+    #     file = form_data.get("file")
+    #     session_name = form_data.get("session_name", "default_session")
         
-        if not file or not hasattr(file, 'filename'):
-            return RedirectResponse(url="/api/database/upload", status_code=303)
+    #     if not file or not hasattr(file, 'filename'):
+    #         return RedirectResponse(url="/api/database/upload", status_code=303)
         
-        if file.filename == '':
-            return RedirectResponse(url="/api/database/upload", status_code=303)
+    #     if file.filename == '':
+    #         return RedirectResponse(url="/api/database/upload", status_code=303)
         
-        if file and allowed_file(file.filename):
-            # Сохраняем файл во временную директорию
-            with NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
-                content = await file.read()
-                temp_file.write(content)
-                temp_file_path = temp_file.name
+    #     if file and allowed_file(file.filename):
+    #         # Сохраняем файл во временную директорию
+    #         with NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
+    #             content = await file.read()
+    #             temp_file.write(content)
+    #             temp_file_path = temp_file.name
             
-            try:
-                # Создаем сессию
-                session_id = db_manager._get_or_create_session(None, session_name)
+    #         try:
+    #             # Создаем сессию
+    #            current_db = get_db_manager()  
+    #             session_id = current_db._get_or_create_session(None, session_name)
                 
-                # Читаем и обрабатываем файл
-                with open(temp_file_path, 'r', encoding='utf-8') as f:
-                    lines = f.readlines()
-                    success_count = 0
-                    error_count = 0
+    #             # Читаем и обрабатываем файл
+    #             with open(temp_file_path, 'r', encoding='utf-8') as f:
+    #                 lines = f.readlines()
+    #                 success_count = 0
+    #                 error_count = 0
                     
-                    for line in lines:
-                        line = line.strip()
-                        if line:
-                            result = db_manager.parse_and_store_data(line, session_id, session_name)
-                            if result:
-                                success_count += 1
-                            else:
-                                error_count += 1
+    #                 for line in lines:
+    #                     line = line.strip()
+    #                     if line:
+    #                        current_db = get_db_manager()  
+    #                         result = current_db.parse_and_store_data(line, session_id, session_name)
+    #                         if result:
+    #                             success_count += 1
+    #                         else:
+    #                             error_count += 1
                 
-                # Возвращаем HTML с JavaScript alert как в оригинале
-                html_response = f'''
-                <script>
-                    alert('Файл успешно обработан! Успешно: {success_count}, Ошибок: {error_count}');
-                    window.location.href = '/';
-                </script>
-                '''
-                return HTMLResponse(content=html_response)
+    #             # Возвращаем HTML с JavaScript alert как в оригинале
+    #             html_response = f'''
+    #             <script>
+    #                 alert('Файл успешно обработан! Успешно: {success_count}, Ошибок: {error_count}');
+    #                 window.location.href = '/';
+    #             </script>
+    #             '''
+    #             return HTMLResponse(content=html_response)
                 
-            except Exception as e:
-                html_response = f'''
-                <script>
-                    alert('Ошибка при обработке файла: {str(e)}');
-                    window.location.href = '/';
-                </script>
-                '''
-                return HTMLResponse(content=html_response)
-            finally:
-                # Удаляем временный файл
-                if os.path.exists(temp_file_path):
-                    os.remove(temp_file_path)
+    #         except Exception as e:
+    #             html_response = f'''
+    #             <script>
+    #                 alert('Ошибка при обработке файла: {str(e)}');
+    #                 window.location.href = '/';
+    #             </script>
+    #             '''
+    #             return HTMLResponse(content=html_response)
+    #         finally:
+    #             # Удаляем временный файл
+    #             if os.path.exists(temp_file_path):
+    #                 os.remove(temp_file_path)
     
-    # GET метод - показываем форму
-    html_form = '''
-    <form method="post" enctype="multipart/form-data">
-        <input type="file" name="file">
-        <input type="text" name="session_name" placeholder="Session name" value="default_session">
-        <input type="submit" value="Upload">
-    </form>
-    '''
-    return HTMLResponse(content=html_form)
+    # # GET метод - показываем форму
+    # html_form = '''
+    # <form method="post" enctype="multipart/form-data">
+    #     <input type="file" name="file">
+    #     <input type="text" name="session_name" placeholder="Session name" value="default_session">
+    #     <input type="submit" value="Upload">
+    # </form>
+    # '''
+    # return HTMLResponse(content=html_form)
 
 # ==================== USER ENDPOINTS (для auth-service) ====================
 
@@ -691,12 +790,17 @@ async def upload_file(request: Request):
 async def authenticate_user(auth_data: dict):
     """Аутентификация пользователя (для внутреннего использования auth-service)"""
     try:
-        username = auth_data.get("username")
-        password = auth_data.get("password")
+        username = auth_data.get("username", None)
+        password = auth_data.get("password", None)
+        
+        if username is None or password is None:
+            return {"authenticated": False}
+        
+        current_db = get_db_manager()  
         
         # Используем функцию из user_crud.py
         from user_crud import authenticate_user_db
-        user = authenticate_user_db(db_manager, username, password)
+        user = authenticate_user_db(current_db, username, password)
         if not user:
             return {"authenticated": False}
         
@@ -706,33 +810,8 @@ async def authenticate_user(auth_data: dict):
         }
         
     except Exception as e:
-        logging.error(f"Authentication error for user {auth_data.get('username')}: {str(e)}")
+        logger.error(f"Authentication error for user {auth_data.get('username')}: {str(e)}")
         return {"authenticated": False}
-
-from redis_subscriber import get_redis_subscriber
-
-# Добавим в startup_event
-@app.on_event("startup")
-async def startup_event():
-    # Проверяем Redis
-    from redis_subscriber import get_redis_subscriber
-    redis_subscriber = get_redis_subscriber()
-    
-    # Проверяем подключение Redis
-    if not redis_subscriber.redis_client:
-        logging.error("❌ REDIS CLIENT IS NONE!")
-    elif not redis_subscriber.redis_client.is_connected():
-        logging.error("❌ REDIS CLIENT NOT CONNECTED!")
-    else:
-        logging.info("✅ Redis client is connected")
-    
-    # Запускаем подписчик
-    redis_subscriber.start()
-    logging.info("✅ Redis subscriber started")
-@app.on_event("shutdown")
-async def shutdown_event():
-    redis_subscriber = get_redis_subscriber()
-    redis_subscriber.stop()
 
 if __name__ == "__main__":
     import uvicorn
@@ -740,6 +819,7 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=8004,
+        workers=1,
         log_level="info",
         reload=False
     )

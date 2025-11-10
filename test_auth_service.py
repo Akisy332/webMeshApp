@@ -19,7 +19,7 @@ class AuthServiceTester:
     
     def print_result(self, test_name: str, success: bool, response=None):
         """Печать результата теста"""
-        status = "✅ PASS" if success else "❌ FAIL"
+        status = "PASS" if success else "FAIL"
         print(f"{status} {test_name}")
         if response is not None:
             print(f"   Status: {response.status_code}")
@@ -35,7 +35,7 @@ class AuthServiceTester:
             self.print_result("Health Check", success, response)
             return success
         except Exception as e:
-            print(f"❌ FAIL Health Check - Exception: {e}")
+            print(f"FAIL Health Check - Exception: {e}")
             return False
     
     def create_test_user(self) -> bool:
@@ -63,13 +63,13 @@ class AuthServiceTester:
             
             return success
         except Exception as e:
-            print(f"❌ FAIL Create Test User - Exception: {e}")
+            print(f"FAIL Create Test User - Exception: {e}")
             return False
     
     def test_login_with_test_user(self) -> bool:
         """Тест входа с созданным пользователем"""
         if not self.test_user:
-            print("❌ FAIL Login with Test User - No test user created")
+            print("FAIL Login with Test User - No test user created")
             return False
         
         try:
@@ -95,7 +95,7 @@ class AuthServiceTester:
             
             return success
         except Exception as e:
-            print(f"❌ FAIL Login with Test User - Exception: {e}")
+            print(f"FAIL Login with Test User - Exception: {e}")
             return False
     
     def test_login_with_invalid_credentials(self) -> bool:
@@ -115,13 +115,13 @@ class AuthServiceTester:
             self.print_result("Login with Invalid Credentials", success, response)
             return success
         except Exception as e:
-            print(f"❌ FAIL Login with Invalid Credentials - Exception: {e}")
+            print(f"FAIL Login with Invalid Credentials - Exception: {e}")
             return False
     
     def test_token_verification(self) -> bool:
         """Тест верификации токена"""
         if not self.access_token:
-            print("❌ FAIL Token Verification - No access token")
+            print("FAIL Token Verification - No access token")
             return False
         
         try:
@@ -141,13 +141,13 @@ class AuthServiceTester:
             
             return success
         except Exception as e:
-            print(f"❌ FAIL Token Verification - Exception: {e}")
+            print(f"FAIL Token Verification - Exception: {e}")
             return False
     
     def test_get_current_user(self) -> bool:
         """Тест получения информации о текущем пользователе"""
         if not self.access_token:
-            print("❌ FAIL Get Current User - No access token")
+            print("FAIL Get Current User - No access token")
             return False
         
         try:
@@ -169,13 +169,13 @@ class AuthServiceTester:
             
             return success
         except Exception as e:
-            print(f"❌ FAIL Get Current User - Exception: {e}")
+            print(f"FAIL Get Current User - Exception: {e}")
             return False
     
     def test_token_refresh(self) -> bool:
         """Тест обновления токена"""
         if not self.refresh_token:
-            print("❌ FAIL Token Refresh - No refresh token")
+            print("FAIL Token Refresh - No refresh token")
             return False
         
         try:
@@ -198,13 +198,13 @@ class AuthServiceTester:
             
             return success
         except Exception as e:
-            print(f"❌ FAIL Token Refresh - Exception: {e}")
+            print(f"FAIL Token Refresh - Exception: {e}")
             return False
     
     def test_token_validation(self) -> bool:
         """Тест валидации токена для gateway"""
         if not self.access_token:
-            print("❌ FAIL Token Validation - No access token")
+            print("FAIL Token Validation - No access token")
             return False
         
         try:
@@ -227,13 +227,13 @@ class AuthServiceTester:
             
             return success
         except Exception as e:
-            print(f"❌ FAIL Token Validation - Exception: {e}")
+            print(f"FAIL Token Validation - Exception: {e}")
             return False
     
     def test_logout(self) -> bool:
         """Тест выхода пользователя"""
         if not self.refresh_token:
-            print("❌ FAIL Logout - No refresh token")
+            print("FAIL Logout - No refresh token")
             return False
         
         try:
@@ -253,7 +253,7 @@ class AuthServiceTester:
             
             return success
         except Exception as e:
-            print(f"❌ FAIL Logout - Exception: {e}")
+            print(f"FAIL Logout - Exception: {e}")
             return False
     
     def test_invalid_token(self) -> bool:
@@ -271,7 +271,7 @@ class AuthServiceTester:
             self.print_result("Invalid Token Handling", success, response)
             return success
         except Exception as e:
-            print(f"❌ FAIL Invalid Token Handling - Exception: {e}")
+            print(f"FAIL Invalid Token Handling - Exception: {e}")
             return False
     
     def create_admin_user(self) -> bool:
@@ -295,13 +295,13 @@ class AuthServiceTester:
             self.print_result("Create Admin User", success, response)
             
             if response.status_code == 200:
-                print("   ✅ Admin user created")
+                print("    Admin user created")
             elif response.status_code == 400:
-                print("   ℹ️  Admin user already exists")
+                print("    Admin user already exists")
             
             return True  # Всегда возвращаем True, т.к. существование пользователя - не ошибка
         except Exception as e:
-            print(f"❌ FAIL Create Admin User - Exception: {e}")
+            print(f"FAIL Create Admin User - Exception: {e}")
             return False
     
     def test_login_with_admin(self) -> bool:
@@ -326,12 +326,12 @@ class AuthServiceTester:
             
             return success
         except Exception as e:
-            print(f"❌ FAIL Login with Admin - Exception: {e}")
+            print(f"FAIL Login with Admin - Exception: {e}")
             return False
     
     def run_all_tests(self) -> bool:
         """Запуск всех тестов"""
-        print("🔍 Starting Auth Service Tests")
+        print("Starting Auth Service Tests")
         print("=" * 50)
         
         # Основные тесты без зависимостей от токенов
@@ -369,16 +369,16 @@ class AuthServiceTester:
                 if test():
                     passed += 1
         else:
-            print("\n⚠️  User Service недоступен, пропускаем тесты с пользователями")
+            print("\n User Service недоступен, пропускаем тесты с пользователями")
             passed += len(user_tests)  # Считаем пропущенные тесты как пройденные
         
         print("=" * 50)
-        print(f"📊 Test Results: {passed}/{total} tests passed")
+        print(f"Test Results: {passed}/{total} tests passed")
         
         if passed == total:
-            print("🎉 All tests passed! Auth Service is working correctly.")
+            print("All tests passed! Auth Service is working correctly.")
         else:
-            print("⚠️  Some tests failed. Check the service configuration.")
+            print(" Some tests failed. Check the service configuration.")
         
         return passed == total
     

@@ -31,10 +31,10 @@ class RedisWebSocketBridge:
             
             # Проверяем соединение
             self.redis_client.ping()
-            logger.info("✅ Redis client initialized for WebSocket bridge")
+            logger.info("Redis client initialized for WebSocket bridge")
             
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Redis client: {e}")
+            logger.error(f"Failed to initialize Redis client: {e}")
             self.redis_client = None
     
     def is_connected(self):
@@ -50,20 +50,20 @@ class RedisWebSocketBridge:
             return
         
         if not self.is_connected():
-            logger.error("❌ Cannot start Redis-WebSocket bridge - no Redis connection")
+            logger.error("Cannot start Redis-WebSocket bridge - no Redis connection")
             return
         
         self.running = True
         self.thread = threading.Thread(target=self._listen_redis, daemon=True)
         self.thread.start()
-        logger.info("✅ Redis-WebSocket bridge started")
+        logger.info("Redis-WebSocket bridge started")
     
     def stop(self):
         """Остановка моста"""
         self.running = False
         if self.thread:
             self.thread.join(timeout=5)
-        logger.info("❌ Redis-WebSocket bridge stopped")
+        logger.info("Redis-WebSocket bridge stopped")
     
     def _listen_redis(self):
         """Прослушивание Redis и отправка через WebSocket"""
@@ -72,7 +72,7 @@ class RedisWebSocketBridge:
         
         while self.running and retry_count < max_retries:
             try:
-                logger.info("🔍 Listening for Redis messages on channel 'frontend_updates'")
+                logger.info("Listening for Redis messages on channel 'frontend_updates'")
                 
                 pubsub = self.redis_client.pubsub()
                 pubsub.subscribe('frontend_updates')
@@ -89,25 +89,25 @@ class RedisWebSocketBridge:
                             self._send_to_websocket(data)
                             retry_count = 0  # Сброс счетчика при успешном получении
                         except json.JSONDecodeError as e:
-                            logger.error(f"❌ JSON decode error: {e}")
+                            logger.error(f"JSON decode error: {e}")
                     
                     # Проверяем соединение каждые 10 сообщений
                     if not self.is_connected():
-                        logger.warning("❌ Redis connection lost, reconnecting...")
+                        logger.warning("Redis connection lost, reconnecting...")
                         break
                         
             except Exception as e:
                 retry_count += 1
-                logger.error(f"❌ Redis listener error (attempt {retry_count}/{max_retries}): {e}")
+                logger.error(f"Redis listener error (attempt {retry_count}/{max_retries}): {e}")
                 
                 if self.running and retry_count < max_retries:
                     time.sleep(5)  # Пауза перед повторной попыткой
                 else:
-                    logger.error("❌ Max retries exceeded, stopping Redis listener")
+                    logger.error("Max retries exceeded, stopping Redis listener")
                     break
         
         if self.running:
-            logger.error("❌ Redis listener stopped unexpectedly")
+            logger.error("Redis listener stopped unexpectedly")
     
     def _send_to_websocket(self, message: dict):
         """Отправка сообщения через WebSocket"""
@@ -123,9 +123,9 @@ class RedisWebSocketBridge:
                 logger.debug(f"📤 WebSocket emit: dataUpdate - {message_type}")
                 
         except Exception as e:
-            logger.error(f"❌ WebSocket emit error: {e}")
+            logger.error(f"WebSocket emit error: {e}")
 
 # Альтернативная простая версия для отправки данных
 def send_new_module_data(data):
     """Заглушка для обратной совместимости"""
-    logger.warning("⚠️ Direct WebSocket emission deprecated, use Redis instead")
+    logger.warning("Direct WebSocket emission deprecated, use Redis instead")

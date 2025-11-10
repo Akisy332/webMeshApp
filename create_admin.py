@@ -30,7 +30,7 @@ def create_admin_via_api():
         
         if response.status_code == 200:
             user_data = response.json()
-            print(f"✅ Admin user created successfully via API!")
+            print(f"Admin user created successfully via API!")
             print(f"   Username: {user_data['user']['username']}")
             print(f"   Email: {user_data['user']['email']}")
             print(f"   Role: {user_data['user']['role']}")
@@ -38,28 +38,28 @@ def create_admin_via_api():
         elif response.status_code == 400:
             error_detail = response.json().get('detail', '')
             if 'already exists' in error_detail:
-                print("ℹ️  Admin user already exists in system")
+                print(" Admin user already exists in system")
                 return True
             else:
-                print(f"❌ API Error: {error_detail}")
+                print(f"API Error: {error_detail}")
                 return False
         else:
-            print(f"❌ API returned status: {response.status_code}")
+            print(f"API returned status: {response.status_code}")
             return False
             
     except Exception as e:
-        print(f"❌ API call failed: {e}")
+        print(f"API call failed: {e}")
         return False
 
 def main():
     """Основная функция"""
-    print("🛠️  Admin User Creation")
+    print(" Admin User Creation")
     print("=" * 40)
     
     # пробуем через API
     create_admin_via_api()
     
-    print("❌ Failed to create admin user")
+    print("Failed to create admin user")
     sys.exit(1)
 
 if __name__ == "__main__":

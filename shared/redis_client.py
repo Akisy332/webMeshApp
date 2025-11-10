@@ -29,14 +29,14 @@ class RedisClient:
                 )
                 # Проверяем соединение
                 self.client.ping()
-                logger.info("✅ Redis connection established")
+                logger.info("Redis connection established")
                 return
             except Exception as e:
-                logger.warning(f"❌ Redis connection attempt {attempt + 1} failed: {e}")
+                logger.warning(f"Redis connection attempt {attempt + 1} failed: {e}")
                 if attempt < max_retries - 1:
                     time.sleep(2)
                 else:
-                    logger.error("❌ All Redis connection attempts failed")
+                    logger.error("All Redis connection attempts failed")
                     self.client = None
     
     def is_connected(self) -> bool:
@@ -61,7 +61,7 @@ class RedisClient:
             logger.debug(f"📤 Published to {channel}: {result} subscribers")
             return result > 0
         except Exception as e:
-            logger.error(f"❌ Redis publish error: {e}")
+            logger.error(f"Redis publish error: {e}")
             return False
     
     def subscribe(self, channel: str, callback: Callable[[Dict[str, Any]], None]):
@@ -80,7 +80,7 @@ class RedisClient:
             logger.info(f"📥 Subscribed to channel: {channel}")
             return thread
         except Exception as e:
-            logger.error(f"❌ Redis subscribe error: {e}")
+            logger.error(f"Redis subscribe error: {e}")
             return None
     
     def listen_messages(self, channel: str, timeout: int = 1):
@@ -102,7 +102,7 @@ class RedisClient:
                     yield data
                     
         except Exception as e:
-            logger.error(f"❌ Redis listen error: {e}")
+            logger.error(f"Redis listen error: {e}")
             yield from []
 
 # Глобальный экземпляр
