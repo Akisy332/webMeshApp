@@ -72,6 +72,51 @@ async def create_user(user: UserCreate):
             detail="Internal server error during user creation"
         )
 
+
+@app.get("/api/users/init-first-admin")
+async def init_first_admin():
+    """Инициализация первого администратора (публичный эндпоинт)"""
+    try:
+        # Проверяем, есть ли уже администраторы в системе
+        admin_count = db_manager.db.execute(
+            "SELECT COUNT(*) as count FROM users WHERE role IN ('admin', 'developer')",
+            fetch_one=True
+        )
+        
+        if admin_count and admin_count['count'] > 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Administrator already exists in the system"
+            )
+        
+        admin_user = {
+            'email': 'admin@main.ru',
+            'username': 'admin',
+            'password': 'Admin123!',
+            'role': UserRole.ADMIN
+        }
+        
+        from user_crud import create_user_db
+        db_user = create_user_db(db_manager, admin_user)
+        if db_user is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Email or username already registered"
+            )
+        
+        logging.info(f"First admin user created: {db_user['username']}")
+        return {"message": "First administrator created successfully", "user": db_user}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error creating first admin: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error during admin creation"
+        )
+
+
 @app.get("/api/users/{user_id}", response_model=UserResponse)
 async def get_user(user_id: int):
     """Получение пользователя по ID"""
@@ -97,8 +142,8 @@ async def get_user(user_id: int):
 async def get_user_by_username(username: str):
     """Получение пользователя по username"""
     try:
-        from user_crud import get_user_by_username_db
-        user = get_user_by_username_db(db_manager, username)
+        from user_crud import get_user_by_username
+        user = get_user_by_username(db_manager, username)
         if not user:
             raise HTTPException(
                 status_code=404,
@@ -234,48 +279,7 @@ async def get_users(
             detail="Internal server error"
         )
 
-@app.get("/api/users/init-first-admin")
-async def init_first_admin():
-    """Инициализация первого администратора (публичный эндпоинт)"""
-    try:
-        # Проверяем, есть ли уже администраторы в системе
-        admin_count = db_manager.db.execute(
-            "SELECT COUNT(*) as count FROM users WHERE role IN ('admin', 'developer')",
-            fetch_one=True
-        )
-        
-        if admin_count and admin_count['count'] > 0:
-            raise HTTPException(
-                status_code=400,
-                detail="Administrator already exists in the system"
-            )
-        
-        admin_user = {
-            'email': 'admin@main.ru',
-            'username': 'admin',
-            'password': 'Admin123!',
-            'role': UserRole.ADMIN
-        }
-        
-        from user_crud import create_user_db
-        db_user = create_user_db(db_manager, admin_user)
-        if db_user is None:
-            raise HTTPException(
-                status_code=400,
-                detail="Email or username already registered"
-            )
-        
-        logging.info(f"First admin user created: {db_user['username']}")
-        return {"message": "First administrator created successfully", "user": db_user}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"Error creating first admin: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error during admin creation"
-        )
+
 
 # ==================== SESSIONS ENDPOINTS ====================
 
@@ -571,6 +575,25 @@ async def get_database_stats():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/database/migrate-sqlite")
+async def migrate_sqlite_to_postgres():
+    """Миграция данных из SQLite в PostgreSQL"""
+    try:
+        # Импортируем и запускаем миграцию
+        from migrate_sqlite_to_postgres import migrate_data, verify_migration
+        
+        logging.info("Starting SQLite to PostgreSQL migration...")
+        
+        if migrate_data():
+            verify_migration()
+            return {"message": "Migration completed successfully"}
+        else:
+            raise HTTPException(status_code=500, detail="Migration failed")
+            
+    except Exception as e:
+        logging.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/data/parse")
 async def parse_and_store_data(
     data_string: str,
@@ -686,6 +709,31 @@ async def authenticate_user(auth_data: dict):
         logging.error(f"Authentication error for user {auth_data.get('username')}: {str(e)}")
         return {"authenticated": False}
 
+from redis_subscriber import get_redis_subscriber
+
+# Добавим в startup_event
+@app.on_event("startup")
+async def startup_event():
+    # Проверяем Redis
+    from redis_subscriber import get_redis_subscriber
+    redis_subscriber = get_redis_subscriber()
+    
+    # Проверяем подключение Redis
+    if not redis_subscriber.redis_client:
+        logging.error("❌ REDIS CLIENT IS NONE!")
+    elif not redis_subscriber.redis_client.is_connected():
+        logging.error("❌ REDIS CLIENT NOT CONNECTED!")
+    else:
+        logging.info("✅ Redis client is connected")
+    
+    # Запускаем подписчик
+    redis_subscriber.start()
+    logging.info("✅ Redis subscriber started")
+@app.on_event("shutdown")
+async def shutdown_event():
+    redis_subscriber = get_redis_subscriber()
+    redis_subscriber.stop()
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
@@ -695,3 +743,4 @@ if __name__ == "__main__":
         log_level="info",
         reload=False
     )
+    

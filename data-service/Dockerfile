@@ -1,8 +1,9 @@
+# data-service/Dockerfile
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Установка системных зависимостей для PostgreSQL
+# Установка системных зависимостей для PostgreSQL и Redis
 RUN apt-get update && apt-get install -y \
     gcc \
     python3-dev \
@@ -15,6 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Копирование исходного кода
 COPY data-service/ .
+
+COPY database.db/ .
 
 # Копируем общие модули (без models_postgres.py)
 COPY shared/ ./shared/

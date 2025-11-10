@@ -1,3 +1,4 @@
+# frontend/Dockerfile
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -10,8 +11,11 @@ RUN apt-get update && apt-get install -y \
 COPY frontend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копирование исходного кода
+# Копирование исходного кода frontend
 COPY frontend/ .
+
+# Копируем общие модули
+COPY shared/ ./shared/
 
 EXPOSE 5000
 

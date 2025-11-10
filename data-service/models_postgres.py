@@ -167,8 +167,20 @@ class PostgreSQLDatabaseManager:
         tables = self.check_required_tables()
         if len(tables) != 0:
             self.init_database()
+            
+        self.init_user_tables()
     
         self.get_all_sessions()
+        
+    def init_user_tables(self):
+        """Инициализация таблиц пользователей"""
+        try:
+            from database_models import init_user_tables
+            init_user_tables(self)
+            self.logger.info("✅ User tables initialized successfully")
+        except Exception as e:
+            self.logger.error(f"❌ Error initializing user tables: {str(e)}")
+            raise
 
     def _setup_logger(self):
         logger = logging.getLogger('PostgreSQLModels')
@@ -291,6 +303,363 @@ class PostgreSQLDatabaseManager:
             except Exception as e:
                 logging.error(f"Error executing init query: {e}")
 
+    def save_structured_data_batch(self, data: dict, session_id: int) -> Optional[dict]:
+        """Публичный метод для сохранения структурированных данных батчем в ОДНОЙ транзакции"""
+        try:
+            hops = data.get('hops', [])
+            self.logger.info(f"🔄 Starting batch save for {len(hops)} hops, session {session_id}")
+
+            if not hops:
+                self.logger.warning("No hops to save")
+                return None
+
+            # ВСЕ операции в ОДНОЙ транзакции
+            with self.db.get_cursor() as cursor:
+                # Подготавливаем данные
+                module_ids = set()
+                batch_data = []
+                datetime_str = data.get('timestamp', datetime.now().isoformat())
+                datetime_obj = datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
+                datetime_unix = int(datetime_obj.timestamp())
+                packet_number = data.get('packet_number', 1)
+
+                for hop in hops:
+                    module_id = hop.get('module_num', 0)
+                    if module_id > 0:
+                        module_ids.add(module_id)
+                        lat = hop.get('lat', 0)
+                        lon = hop.get('lng', 0)
+                        alt = hop.get('altitude', 0)
+                        gps_ok = lat != 0 and lon != 0
+
+                        batch_data.append((
+                            module_id, session_id, 0,
+                            datetime_str, datetime_unix,
+                            lat if gps_ok else None,
+                            lon if gps_ok else None,
+                            alt, gps_ok, packet_number,
+                            None, None, None, None
+                        ))
+
+                self.logger.info(f"📦 Prepared {len(batch_data)} records from {len(module_ids)} unique modules")
+
+                if not batch_data:
+                    self.logger.warning("No valid batch data to save")
+                    return None
+
+                # 1. Обеспечиваем существование модулей
+                self.logger.info(f"Ensuring {len(module_ids)} modules exist")
+                self._ensure_modules_exist_batch_in_transaction(cursor, module_ids)
+
+                # 2. Батчевая вставка
+                self.logger.info(f"Executing batch insert for {len(batch_data)} records")
+                inserted_ids = self._batch_insert_data_in_transaction(cursor, batch_data)
+
+                self.logger.info(f"Batch insert result: {len(inserted_ids)} inserted IDs: {inserted_ids}")
+
+                if not inserted_ids:
+                    self.logger.error("No records were inserted")
+                    return None
+
+                # 3. Получаем полные данные В ТОЙ ЖЕ ТРАНЗАКЦИИ
+                self.logger.info("Fetching full data for inserted records")
+                saved_records = self._get_full_data_batch_in_transaction(cursor, inserted_ids)
+
+                if not saved_records:
+                    self.logger.error("❌ Failed to retrieve saved records from database")
+                    return None
+
+                # Формируем результат
+                result_data = data.copy()
+                result_data['saved_hops'] = saved_records
+                result_data['db_save_time'] = datetime.now().isoformat()
+
+                self.logger.info(f"✅ Successfully saved and retrieved {len(saved_records)} records in single transaction")
+                return result_data
+
+        except Exception as e:
+            self.logger.error(f"❌ Batch save error: {e}")
+            import traceback
+            self.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            return None
+    
+    def _get_full_data_batch_in_transaction(self, cursor, data_ids: list) -> list:
+        """Получение полных данных в ТОЙ ЖЕ транзакции"""
+        try:
+            if not data_ids:
+                self.logger.warning("No data IDs provided")
+                return []
+            
+            self.logger.info(f"Fetching full data for {len(data_ids)} IDs: {data_ids}")
+            
+            placeholders = ','.join(['%s'] * len(data_ids))
+            cursor.execute(
+                f"""
+                SELECT 
+                    d.*,
+                    m.name as module_name,
+                    m.color as module_color,
+                    mt.type as message_type,
+                    s.name as session_name
+                FROM data d
+                LEFT JOIN modules m ON d.id_module = m.id
+                LEFT JOIN message_type mt ON d.id_message_type = mt.id
+                LEFT JOIN sessions s ON d.id_session = s.id
+                WHERE d.id IN ({placeholders})
+                ORDER BY d.id
+                """,
+                tuple(data_ids)
+            )
+            
+            records = cursor.fetchall()
+            self.logger.info(f"Raw DB result: {len(records)} records")
+            
+            if not records:
+                self.logger.error("No records returned from database query")
+                return []
+            
+            # Форматируем результат
+            result = []
+            for data in records:
+                try:
+                    formatted_data = {
+                        'id': data['id'],
+                        'id_module': format(data['id_module'], 'X'),
+                        'module_name': data['module_name'],
+                        'module_color': data['module_color'],
+                        'session_id': data['id_session'],
+                        'session_name': data['session_name'],
+                        'message_type': data['id_message_type'],
+                        'message_type_name': data['message_type'],
+                        'datetime': data['datetime'].isoformat() if data['datetime'] else None,
+                        'datetime_unix': data['datetime_unix'],
+                        'coords': {
+                            'lat': data['lat'],
+                            'lon': data['lon'], 
+                            'alt': data['alt']
+                        },
+                        'rssi': data['rssi'],
+                        'snr': data['snr'],
+                        'source': data['source'],
+                        'jumps': data['jumps'],
+                        'gps_ok': bool(data['gps_ok']),
+                        'message_number': data['message_number'],
+                        'created_at': data['created_at'].isoformat() if data['created_at'] else None
+                    }
+                    result.append(formatted_data)
+                    
+                except Exception as e:
+                    self.logger.error(f"Error formatting record {data.get('id', 'unknown')}: {e}")
+                    continue
+                
+            self.logger.info(f"✅ Successfully formatted {len(result)} records")
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error getting full data batch: {e}")
+            return []
+    
+    def _batch_insert_data_in_transaction(self, cursor, batch_data: list) -> list:
+        """Батчевая вставка в транзакции"""
+        try:
+            inserted_ids = []
+
+            for i, record in enumerate(batch_data):
+                try:
+                    cursor.execute("""
+                        INSERT INTO data 
+                        (id_module, id_session, id_message_type, datetime, datetime_unix,
+                         lat, lon, alt, gps_ok, message_number, rssi, snr, source, jumps)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                    """, record)
+
+                    result = cursor.fetchone()
+                    if result:
+                        inserted_ids.append(result['id'])
+                        self.logger.debug(f"Inserted record {i+1} with ID {result['id']}")
+                    else:
+                        self.logger.warning(f"No ID returned for record {i+1}")
+
+                except Exception as e:
+                    self.logger.error(f"Error inserting record {i+1}: {e}")
+                    self.logger.error(f"Problematic record: {record}")
+                    raise
+                
+            self.logger.info(f"✅ Successfully inserted {len(inserted_ids)} records")
+            return inserted_ids
+
+        except Exception as e:
+            self.logger.error(f"❌ Batch insert failed: {e}")
+            return []
+
+    def _ensure_modules_exist_batch_in_transaction(self, cursor, module_ids: set):
+        """Обеспечиваем существование модулей в транзакции"""
+        try:
+            if not module_ids:
+                return
+
+            for module_id in module_ids:
+                cursor.execute("SELECT 1 FROM modules WHERE id = %s", (module_id,))
+                if not cursor.fetchone():
+                    name = f"Module {module_id}"
+                    color = self._generate_contrasting_color(module_id)
+                    cursor.execute(
+                        "INSERT INTO modules (id, name, color) VALUES (%s, %s, %s) ON CONFLICT (id) DO NOTHING",
+                        (module_id, name, color)
+                    )
+                    self.logger.debug(f"Created module {module_id}")
+
+        except Exception as e:
+            self.logger.error(f"Error ensuring modules: {e}")
+            raise
+
+    def _ensure_modules_exist_batch(self, cursor, module_ids: set):
+        """Внутренний метод для батчевого создания модулей"""
+        try:
+            if not module_ids:
+                return
+
+            # Используем существующий метод _ensure_module_exists как основу
+            placeholders = ','.join(['%s'] * len(module_ids))
+            cursor.execute(f"SELECT id FROM modules WHERE id IN ({placeholders})", tuple(module_ids))
+            existing_ids = {row['id'] for row in cursor.fetchall()}
+
+            new_ids = module_ids - existing_ids
+            if new_ids:
+                new_modules = []
+                for module_id in new_ids:
+                    name = f"Module {module_id}"
+                    color = self._generate_contrasting_color(module_id)  # Существующий метод
+                    new_modules.append((module_id, name, color))
+
+                from psycopg2.extras import execute_values
+                execute_values(
+                    cursor,
+                    "INSERT INTO modules (id, name, color) VALUES %s ON CONFLICT (id) DO NOTHING",
+                    new_modules
+                )
+
+        except Exception as e:
+            self.logger.error(f"Error ensuring modules batch: {e}")
+            raise
+
+    def _batch_insert_data(self, cursor, batch_data: list) -> list:
+        """Правильная батчевая вставка с возвратом ID"""
+        try:
+            inserted_ids = []
+
+            # Выполняем каждую запись отдельно чтобы получить ID
+            for i, record in enumerate(batch_data):
+                try:
+                    cursor.execute("""
+                        INSERT INTO data 
+                        (id_module, id_session, id_message_type, datetime, datetime_unix,
+                         lat, lon, alt, gps_ok, message_number, rssi, snr, source, jumps)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                    """, record)
+
+                    result = cursor.fetchone()
+                    if result:
+                        inserted_ids.append(result['id'])  # RealDictCursor возвращает словарь
+                        if i < 3:  # Логируем только первые несколько
+                            self.logger.debug(f"Inserted record {i+1} with ID {result['id']}")
+                    else:
+                        self.logger.warning(f"No ID returned for record {i+1}")
+
+                except Exception as e:
+                    self.logger.error(f"Error inserting record {i+1}: {e}")
+                    self.logger.error(f"Problematic record: {record}")
+                    raise  # В транзакции - если одна запись падает, падают все
+                
+            self.logger.info(f"✅ Successfully inserted {len(inserted_ids)} records")
+            return inserted_ids
+
+        except Exception as e:
+            self.logger.error(f"❌ Batch insert failed: {e}")
+            return []
+
+    def _get_full_data_batch(self, data_ids: list) -> list:
+        """Получение полных данных для всех ID батчем"""
+        try:
+            if not data_ids:
+                self.logger.warning("No data IDs provided")
+                return []
+            
+            self.logger.info(f"Fetching full data for {len(data_ids)} IDs: {data_ids}")
+            
+            # Используем существующий метод execute
+            placeholders = ','.join(['%s'] * len(data_ids))
+            records = self.db.execute(
+                f"""
+                SELECT 
+                    d.*,
+                    m.name as module_name,
+                    m.color as module_color,
+                    mt.type as message_type,
+                    s.name as session_name
+                FROM data d
+                LEFT JOIN modules m ON d.id_module = m.id
+                LEFT JOIN message_type mt ON d.id_message_type = mt.id
+                LEFT JOIN sessions s ON d.id_session = s.id
+                WHERE d.id IN ({placeholders})
+                ORDER BY d.id
+                """,
+                params=tuple(data_ids),
+                fetch=True
+            )
+            
+            self.logger.info(f"Raw DB result: {len(records) if records else 0} records")
+            
+            if not records:
+                self.logger.error("No records returned from database query")
+                return []
+            
+            # Форматируем результат
+            result = []
+            for data in records:
+                try:
+                    formatted_data = {
+                        'id': data['id'],
+                        'id_module': format(data['id_module'], 'X'),
+                        'module_name': data['module_name'],
+                        'module_color': data['module_color'],
+                        'session_id': data['id_session'],
+                        'session_name': data['session_name'],
+                        'message_type': data['id_message_type'],
+                        'message_type_name': data['message_type'],
+                        'datetime': data['datetime'].isoformat() if data['datetime'] else None,
+                        'datetime_unix': data['datetime_unix'],
+                        'coords': {
+                            'lat': data['lat'],
+                            'lon': data['lon'], 
+                            'alt': data['alt']
+                        },
+                        'rssi': data['rssi'],
+                        'snr': data['snr'],
+                        'source': data['source'],
+                        'jumps': data['jumps'],
+                        'gps_ok': bool(data['gps_ok']),
+                        'message_number': data['message_number'],
+                        'created_at': data['created_at'].isoformat() if data['created_at'] else None
+                    }
+                    result.append(formatted_data)
+                    
+                except Exception as e:
+                    self.logger.error(f"Error formatting record {data.get('id', 'unknown')}: {e}")
+                    self.logger.error(f"Problematic record: {data}")
+                    continue
+                
+            self.logger.info(f"✅ Successfully formatted {len(result)} records")
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error getting full data batch: {e}")
+            import traceback
+            self.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            return []
+    
     def hide_session(self, session_id: int) -> bool:
         """
         Помечает сессию как скрытую (hidden = true)
@@ -630,6 +999,7 @@ class PostgreSQLDatabaseManager:
                              session_name: str = "", description: str = "") -> Optional[int]:
         """Получение существующей сессии или создание новой"""
         if id_session is not None:
+            print("ID session: ", id_session)
             session = self._get_session_by_id(id_session)
             if session:
                 logging.info(f"Найдена сессия: {session['id']}")
@@ -729,7 +1099,7 @@ class PostgreSQLDatabaseManager:
         # Заполняем поле last_session ID последней сессии
         if sessions:
             self.last_session = sessions[0]['id']
-
+        print("Sessions: ", len(sessions))
         return sessions
 
     def get_all_message_types(self) -> List[Dict[str, Any]]:
