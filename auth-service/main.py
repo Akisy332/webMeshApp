@@ -19,7 +19,7 @@ app = FastAPI(
 logger = logging.getLogger("auth-service")
 auth_config = AuthConfig()
 
-USER_SERVICE_URL = "http://user-service:8004"
+USER_SERVICE_URL = "http://data-service:8004"
 
 # Обработчик сигналов для перезагрузки конфига
 def handle_sighup(signum, frame):

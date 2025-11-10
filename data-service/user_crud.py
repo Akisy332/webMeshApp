@@ -1,9 +1,9 @@
 from typing import Optional, Dict, Any, List
 import logging
 from shared.user_models import UserRole
-from app import auth
+from auth import get_password_hash, verify_password
 
-logger = logging.getLogger("user-service")
+logger = logging.getLogger("data-service")
 
 def get_user_by_email(db_manager, email: str) -> Optional[dict]:
     """Получение пользователя по email"""
@@ -25,7 +25,7 @@ def get_user_by_username(db_manager, username: str) -> Optional[dict]:
         logger.error(f"Error getting user by username {username}: {str(e)}")
         return None
 
-def get_user_by_id(db_manager, user_id: int) -> Optional[dict]:
+def get_user_by_id_db(db_manager, user_id: int) -> Optional[dict]:
     """Получение пользователя по ID"""
     try:
         query = "SELECT * FROM users WHERE id = %s"
@@ -35,7 +35,7 @@ def get_user_by_id(db_manager, user_id: int) -> Optional[dict]:
         logger.error(f"Error getting user by ID {user_id}: {str(e)}")
         return None
 
-def create_user(db_manager, user_data: dict) -> Optional[dict]:
+def create_user_db(db_manager, user_data: dict) -> Optional[dict]:
     """Создание нового пользователя"""
     try:
         # Проверяем, существует ли пользователь с таким email
@@ -49,7 +49,7 @@ def create_user(db_manager, user_data: dict) -> Optional[dict]:
             return None
         
         # Хешируем пароль
-        hashed_password = auth.get_password_hash(user_data['password'])
+        hashed_password = get_password_hash(user_data['password'])
         
         # Определяем роль (по умолчанию 'user')
         role = user_data.get('role', UserRole.USER)
@@ -74,7 +74,7 @@ def create_user(db_manager, user_data: dict) -> Optional[dict]:
         logger.error(f"Error creating user {user_data['username']}: {str(e)}")
         return None
 
-def authenticate_user(db_manager, username: str, password: str) -> Optional[dict]:
+def authenticate_user_db(db_manager, username: str, password: str) -> Optional[dict]:
     """Аутентификация пользователя"""
     try:
         user = get_user_by_username(db_manager, username)
@@ -82,7 +82,7 @@ def authenticate_user(db_manager, username: str, password: str) -> Optional[dict
             logger.warning(f"Authentication failed: user {username} not found")
             return None
         
-        if not auth.verify_password(password, user['hashed_password']):
+        if not verify_password(password, user['hashed_password']):
             logger.warning(f"Authentication failed: invalid password for user {username}")
             return None
         
@@ -97,11 +97,11 @@ def authenticate_user(db_manager, username: str, password: str) -> Optional[dict
         logger.error(f"Error authenticating user {username}: {str(e)}")
         return None
 
-def update_user(db_manager, user_id: int, update_data: dict) -> Optional[dict]:
+def update_user_db(db_manager, user_id: int, update_data: dict) -> Optional[dict]:
     """Обновление информации о пользователе"""
     try:
         # Получаем текущие данные пользователя
-        user = get_user_by_id(db_manager, user_id)
+        user = get_user_by_id_db(db_manager, user_id)
         if not user:
             return None
         
@@ -159,20 +159,20 @@ def update_user(db_manager, user_id: int, update_data: dict) -> Optional[dict]:
         logger.error(f"Error updating user {user_id}: {str(e)}")
         return None
 
-def change_password(db_manager, user_id: int, old_password: str, new_password: str) -> bool:
+def change_password_db(db_manager, user_id: int, old_password: str, new_password: str) -> bool:
     """Смена пароля пользователя"""
     try:
         # Получаем пользователя
-        user = get_user_by_id(db_manager, user_id)
+        user = get_user_by_id_db(db_manager, user_id)
         if not user:
             return False
         
         # Проверяем старый пароль
-        if not auth.verify_password(old_password, user['hashed_password']):
+        if not verify_password(old_password, user['hashed_password']):
             return False
         
         # Хешируем новый пароль
-        hashed_password = auth.get_password_hash(new_password)
+        hashed_password = get_password_hash(new_password)
         
         # Обновляем пароль в БД
         query = "UPDATE users SET hashed_password = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s"
@@ -185,7 +185,7 @@ def change_password(db_manager, user_id: int, old_password: str, new_password: s
         logger.error(f"Error changing password for user {user_id}: {str(e)}")
         return False
 
-def get_users_list(db_manager, skip: int = 0, limit: int = 100) -> list:
+def get_users_list_db(db_manager, skip: int = 0, limit: int = 100) -> list:
     """Получение списка пользователей"""
     try:
         query = "SELECT * FROM users ORDER BY id LIMIT %s OFFSET %s"
@@ -195,7 +195,7 @@ def get_users_list(db_manager, skip: int = 0, limit: int = 100) -> list:
         logger.error(f"Error getting users list: {str(e)}")
         return []
 
-def get_users_by_role(db_manager, role: str, skip: int = 0, limit: int = 100) -> list:
+def get_users_by_role_db(db_manager, role: str, skip: int = 0, limit: int = 100) -> list:
     """Получение пользователей по роли"""
     try:
         query = "SELECT * FROM users WHERE role = %s ORDER BY id LIMIT %s OFFSET %s"
@@ -205,7 +205,7 @@ def get_users_by_role(db_manager, role: str, skip: int = 0, limit: int = 100) ->
         logger.error(f"Error getting users by role {role}: {str(e)}")
         return []
 
-def update_user_role(db_manager, user_id: int, new_role: UserRole) -> Optional[dict]:
+def update_user_role_db(db_manager, user_id: int, new_role: UserRole) -> Optional[dict]:
     """Обновление роли пользователя"""
     try:
         query = """

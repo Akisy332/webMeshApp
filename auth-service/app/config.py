@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     LOG_LEVEL: str = "INFO"
-    USER_SERVICE_URL: str = "http://user-service:8004"
+    USER_SERVICE_URL: str = "http://data-service:8004"
 
     class Config:
         env_file = ".env"

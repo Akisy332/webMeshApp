@@ -1,7 +1,7 @@
 from passlib.context import CryptContext
 import logging
 
-logger = logging.getLogger("user-service")
+logger = logging.getLogger("data-service")
 
 # Используем argon2
 pwd_context = CryptContext(
