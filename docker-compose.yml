@@ -23,7 +23,7 @@ services:
       - POSTGRES_USER=telemetry_user
       - POSTGRES_PASSWORD=telemetry_password
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./postgres_data:/var/lib/postgresql/data
     networks:
       - webmesh-network
     labels:
@@ -116,9 +116,6 @@ services:
       - "traefik.http.routers.frontend.middlewares=auth-forward@file,cors@file"
 
       - "traefik.http.services.frontend.loadbalancer.server.port=5000"
-
-volumes:
-  postgres_data:
 
 
 networks:

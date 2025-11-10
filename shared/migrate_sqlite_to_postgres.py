@@ -12,7 +12,11 @@ logger = logging.getLogger('migration')
 def get_sqlite_value(row, key, default=None):
     """Безопасное получение значения из sqlite3.Row"""
     try:
-        return row[key] if key in row.keys() else default
+        value = row[key] if key in row.keys() else default
+        # Обрабатываем NULL значения
+        if value is None:
+            return default
+        return value
     except (KeyError, IndexError):
         return default
 
@@ -24,6 +28,25 @@ def generate_module_color(module_id):
     value = 0.95
     r, g, b = colorsys.hsv_to_rgb(hue, saturation, value)
     return "#{:02x}{:02x}{:02x}".format(int(r * 255), int(g * 255), int(b * 255))
+
+def safe_int(value, default=None):
+    """Безопасное преобразование в integer"""
+    if value is None or value == '' or value == 'NULL':
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def safe_float(value, default=None):
+    """Безопасное преобразование в float"""
+    if value is None or value == '':
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
 
 def migrate_data():
     """Миграция данных из SQLite в PostgreSQL"""
@@ -127,20 +150,20 @@ def migrate_data():
             data_records = []
             for d in data:
                 data_records.append((
-                    d['id_module'], 
-                    d['id_session'], 
-                    get_sqlite_value(d, 'id_message_type', 0),
+                    safe_int(d['id_module']),
+                    safe_int(d['id_session']),
+                    safe_int(get_sqlite_value(d, 'id_message_type', 0)),
                     d['datetime'],
-                    get_sqlite_value(d, 'datetime_unix', 0),
-                    get_sqlite_value(d, 'lat'),
-                    get_sqlite_value(d, 'lon'),
-                    get_sqlite_value(d, 'alt'),
-                    bool(get_sqlite_value(d, 'gps_ok', 0)),
-                    get_sqlite_value(d, 'message_number', 0),
-                    get_sqlite_value(d, 'rssi'),
-                    get_sqlite_value(d, 'snr'),
-                    get_sqlite_value(d, 'source'),
-                    get_sqlite_value(d, 'jumps')
+                    safe_int(get_sqlite_value(d, 'datetime_unix', 0)),
+                    safe_float(get_sqlite_value(d, 'lat')),
+                    safe_float(get_sqlite_value(d, 'lon')),
+                    safe_float(get_sqlite_value(d, 'alt')),
+                    bool(safe_int(get_sqlite_value(d, 'gps_ok', 0))),
+                    safe_int(get_sqlite_value(d, 'message_number', 0)),
+                    safe_int(get_sqlite_value(d, 'rssi')),  # NULL будет преобразован в None
+                    safe_int(get_sqlite_value(d, 'snr')),   # NULL будет преобразован в None  
+                    safe_int(get_sqlite_value(d, 'source')), # NULL будет преобразован в None
+                    safe_int(get_sqlite_value(d, 'jumps'))  # NULL будет преобразован в None
                 ))
             
             execute_values(

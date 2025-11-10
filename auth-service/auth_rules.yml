@@ -18,6 +18,8 @@ role_minimum_access:
     - path: "/api/auth/health"
       methods: ["GET"]
 
+    - path: "/api/users/init-first-admin"
+      methods: ["GET"]
     - path: "/api/sessions" # Получить сессии или данные конкретной
       methods: ["GET"]
 

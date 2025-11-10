@@ -1,6 +1,6 @@
 -- Создание таблиц для PostgreSQL
 
-CREATE TABLE IF NOT EXISTS module (
+CREATE TABLE IF NOT EXISTS modules (
     id INTEGER PRIMARY KEY,
     name TEXT,
     color TEXT

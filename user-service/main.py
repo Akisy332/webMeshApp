@@ -4,7 +4,7 @@ import logging
 from app import crud, database
 from app.config import settings, logger
 from app.dependencies import get_current_user, require_admin
-from shared.user_models import UserCreate, UserResponse, UserUpdate, RoleUpdateRequest
+from shared.user_models import UserCreate, UserResponse, UserUpdate, RoleUpdateRequest, UserRole
 from shared.auth_models import PasswordChangeRequest
 from typing import List
 
@@ -282,8 +282,8 @@ async def get_users(
             detail="Internal server error"
         )
         
-@app.post("/init-first-admin")
-async def init_first_admin(init_data: dict, db_manager = Depends(database.get_db)):
+@app.get("/api/users/init-first-admin")
+async def init_first_admin(db_manager = Depends(database.get_db)):
     """Инициализация первого администратора (публичный эндпоинт)"""
     try:
         # Проверяем, есть ли уже администраторы в системе
@@ -299,11 +299,18 @@ async def init_first_admin(init_data: dict, db_manager = Depends(database.get_db
             )
         
         # Создаем администратора
+        # admin_user = {
+        #     'email': init_data['email'],
+        #     'username': init_data['username'],
+        #     'password': init_data['password'],
+        #     'role': 'admin'
+        # }
+        
         admin_user = {
-            'email': init_data['email'],
-            'username': init_data['username'],
-            'password': init_data['password'],
-            'role': 'admin'
+            'email': 'admin@main.ru',
+            'username': 'admin',
+            'password': 'Admin123!',
+            'role': UserRole.ADMIN
         }
         
         db_user = crud.create_user(db_manager, admin_user)
