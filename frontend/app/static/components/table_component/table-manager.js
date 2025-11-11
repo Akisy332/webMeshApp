@@ -13,8 +13,8 @@ class TableManager {
         this.startUpdatingTimes();
 
         eventBus.on(EventTypes.SOCKET.NEW_DATA_MODULE, (data) => {
-            // if (!data || !data.coords || !data.coords.lat || !data.coords.lon) return
-            this.updateTable(data)
+            if (!data || !data.points) return;
+            this.updateTable(data.points);
         });
 
         // Подписка на событие очистки таблицы
@@ -281,13 +281,10 @@ class TableManager {
     }
 
     getStatusColor(gpsOk, unixTimestamp) {
-        const now = new Date();
-        // Конвертируем Unix-время в миллисекунды, если нужно
-        const timestamp = typeof unixTimestamp === 'string' && unixTimestamp.length <= 10
-            ? unixTimestamp * 1000
-            : unixTimestamp;
-        const msgTime = new Date(timestamp);
-        const diffSeconds = (now - msgTime) / 1000;
+        const now = Math.floor(Date.now() / 1000); // Текущее время в UNIX (секунды)
+        // Приводим timestamp к числу и работаем только с UNIX-форматом
+        const timestamp = typeof unixTimestamp === 'string' ? parseInt(unixTimestamp) : unixTimestamp;
+        const diffSeconds = now - timestamp;
 
         if (gpsOk) {
             if (diffSeconds < 60) return '#4CAF50';  // зелёный

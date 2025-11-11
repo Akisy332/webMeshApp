@@ -20,15 +20,3 @@ http:
         accesscontrolalloworiginlist: "*"
         accesscontrolmaxage: 100
         addvaryheader: true
-
-    # Middleware для удаления префикса /api/auth
-    auth-stripprefix:
-      stripPrefix:
-        prefixes:
-          - "/api/auth"
-
-    # Middleware для WebSocket (StripPrefix для избежания конфликтов)
-    websocket-strip:
-      stripPrefix:
-        prefixes:
-          - "/socket.io"

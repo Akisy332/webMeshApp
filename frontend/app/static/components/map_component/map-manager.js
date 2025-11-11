@@ -466,14 +466,21 @@ class MapManager {
         });
 
         eventBus.on(EventTypes.SOCKET.NEW_DATA_MODULE, (data) => {
-            if (!data || !data.coords || !data.coords.lat || !data.coords.lon) return;
+            if (!data?.points) return;
 
-            let path = this.paths.get(data.id_module);
+            for (const [moduleId, moduleData] of Object.entries(data.points)) {
+                if (!moduleData?.coords?.lat || !moduleData?.coords?.lon) {
+                    console.warn(`Invalid coordinates for module ${moduleId}`);
+                    continue;
+                }
 
-            if (path) {
-                this.updateTrace(data);
-            } else {
-                this.addOrUpdateMarker(data);
+                const path = this.paths.get(moduleId);
+
+                if (path) {
+                    this.updateTrace(moduleData);
+                } else {
+                    this.addOrUpdateMarker(moduleData);
+                }
             }
         });
 

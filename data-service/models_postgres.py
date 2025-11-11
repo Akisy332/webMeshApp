@@ -370,9 +370,9 @@ class PostgreSQLDatabaseManager:
                     return None
     
                 # Формируем результат
-                result_data = data.copy()
-                result_data['saved_hops'] = saved_records
-                result_data['db_save_time'] = datetime.now().isoformat()
+                result_data = {}
+                result_data['points'] = saved_records
+                result_data['time'] = datetime.now().isoformat()
     
                 self.logger.info(f"Successfully saved and retrieved {len(saved_records)} records in single transaction")
                 return result_data
