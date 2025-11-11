@@ -378,15 +378,15 @@ async def create_session(session_data: dict):
         
         current_db = get_db_manager()
         
-        session_id = current_db._get_or_create_session(None, session_data['name'], session_data.get('description', ''))
+        id_session = current_db._get_or_create_session(None, session_data['name'], session_data.get('description', ''))
         
-        if not session_id:
+        if not id_session:
             raise HTTPException(status_code=500, detail="Не удалось создать сессию")
             
-        session_data_result = current_db._get_session_by_id(session_id)
+        session_data_result = current_db._get_session_by_id(id_session)
         
         new_session = {
-            'id': session_id,
+            'id': id_session,
             'name': session_data['name'],
             'description': session_data.get('description', ''),
             'datetime': session_data_result['datetime'].isoformat() if session_data_result and session_data_result.get('datetime') else datetime.now().isoformat()
@@ -397,39 +397,39 @@ async def create_session(session_data: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/sessions/{session_id}")
-async def get_session_data(session_id: int):
+@app.get("/api/sessions/{id_session}")
+async def get_session_data(id_session: int):
     """Получение данных конкретной сессии"""
     try:
         current_db = get_db_manager()
         
         data = {}
-        data["modules"] = current_db.get_last_message(session_id)
-        data["map"] = current_db.get_session_map_view(session_id)
+        data["modules"] = current_db.get_last_message(id_session)
+        data["map"] = current_db.get_session_map_view(id_session)
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/api/sessions/{session_id}")
-async def delete_session(session_id: int):
+@app.delete("/api/sessions/{id_session}")
+async def delete_session(id_session: int):
     """Удалить сессию"""
     try:
         current_db = get_db_manager()
         
-        if not current_db.hide_session(session_id):
+        if not current_db.hide_session(id_session):
             raise HTTPException(status_code=404, detail="Сессия не найдена")
         
         return {"message": "Сессия удалена"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/sessions/data/{session_id}")
-async def get_session_center_radius(session_id: int):
+@app.get("/api/sessions/data/{id_session}")
+async def get_session_center_radius(id_session: int):
     """Получение данных конкретной сессии"""
     try:
         current_db = get_db_manager()
         
-        data = current_db.get_session_map_view(session_id)
+        data = current_db.get_session_map_view(id_session)
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -494,7 +494,7 @@ async def search_user(
 
 @app.get("/api/table/users")
 async def get_users_table(
-    session_id: int = Query(0),
+    id_session: int = Query(0),
     modules: str = Query(''),
     limit: int = Query(100),
     offset: int = Query(0),
@@ -518,7 +518,7 @@ async def get_users_table(
         current_db = get_db_manager()        
                 
         data, total_count, modules_count = current_db.get_session_data(
-            session_id=session_id,
+            id_session=id_session,
             module_ids=module_ids,
             limit=limit,
             offset=offset
@@ -533,7 +533,7 @@ async def get_users_table(
             'success': True,
             'data': data,
             'total_count': total_count,
-            'session_id': session_id,
+            'id_session': id_session,
             'has_more': has_more,
             'direction': direction,
             'limit': limit,
@@ -548,7 +548,7 @@ async def get_users_table(
 
 @app.get("/api/table/users/datetime")
 async def get_users_datetime(
-    session_id: int = Query(0),
+    id_session: int = Query(0),
     modules: str = Query(''),
     limit: int = Query(100),
     datetime_unix: int = Query(0),
@@ -567,7 +567,7 @@ async def get_users_datetime(
         current_db = get_db_manager()     
                 
         data, total_count, modules_count, position = current_db.get_session_data_centered_on_time(
-            session_id=session_id,
+            id_session=id_session,
             module_ids=module_ids,
             limit=limit,
             target_datetime_unix=datetime_unix
@@ -582,7 +582,7 @@ async def get_users_datetime(
             'success': True,
             'data': data,
             'total_count': total_count,
-            'session_id': session_id,
+            'id_session': id_session,
             'has_more': has_more,
             'direction': direction,
             'limit': limit,
@@ -625,12 +625,12 @@ async def get_modules():
 @app.get("/api/modules/{module_id}/stats")
 async def get_module_stats(
     module_id: int,
-    session_id: int = Query(None)
+    id_session: int = Query(None)
 ):
     """Получение статистики по модулю"""
     try:
         current_db = get_db_manager()  
-        stats = current_db.get_module_statistics(module_id, session_id)
+        stats = current_db.get_module_statistics(module_id, id_session)
         return stats
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -692,13 +692,13 @@ async def migrate_sqlite_to_postgres():
 @app.post("/api/data/parse")
 async def parse_and_store_data(
     data_string: str,
-    session_id: int = Query(None),
+    id_session: int = Query(None),
     session_name: str = Query("")
 ):
     """Парсинг и сохранение данных"""
     try:
         current_db = get_db_manager()  
-        result = current_db.parse_and_store_data(data_string, session_id, session_name)
+        result = current_db.parse_and_store_data(data_string, id_session, session_name)
         if not result:
             raise HTTPException(status_code=400, detail="Failed to parse and store data")
         return result
@@ -734,7 +734,7 @@ async def upload_file(request: Request):
     #         try:
     #             # Создаем сессию
     #            current_db = get_db_manager()  
-    #             session_id = current_db._get_or_create_session(None, session_name)
+    #             id_session = current_db._get_or_create_session(None, session_name)
                 
     #             # Читаем и обрабатываем файл
     #             with open(temp_file_path, 'r', encoding='utf-8') as f:
@@ -746,7 +746,7 @@ async def upload_file(request: Request):
     #                     line = line.strip()
     #                     if line:
     #                        current_db = get_db_manager()  
-    #                         result = current_db.parse_and_store_data(line, session_id, session_name)
+    #                         result = current_db.parse_and_store_data(line, id_session, session_name)
     #                         if result:
     #                             success_count += 1
     #                         else:

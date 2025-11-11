@@ -147,18 +147,18 @@ class RedisSubscriber:
             filtered_data['hops'] = valid_hops
 
             # Получаем сессию
-            session_id = self.db_manager.last_session
-            if not session_id or session_id == 0:
+            id_session = self.db_manager.last_session
+            if not id_session or id_session == 0:
                 sessions = self.db_manager.get_all_sessions()
                 if sessions:
-                    session_id = sessions[0]['id']
-                    self.db_manager.last_session = session_id
+                    id_session = sessions[0]['id']
+                    self.db_manager.last_session = id_session
                 else:
                     logger.error("No sessions available in database")
                     return
 
             # Сохраняем данные
-            saved_data = self.db_manager.save_structured_data_batch(filtered_data, session_id)
+            saved_data = self.db_manager.save_structured_data_batch(filtered_data, id_session)
 
             if not saved_data:
                 logger.error("Failed to save data to database")
@@ -168,7 +168,7 @@ class RedisSubscriber:
             frontend_message = {
                 'type': 'module_data', 
                 'data': saved_data,
-                'session_id': session_id,
+                'id_session': id_session,
                 'timestamp': data.get('timestamp'),
                 'test_diagnostic': True
             }

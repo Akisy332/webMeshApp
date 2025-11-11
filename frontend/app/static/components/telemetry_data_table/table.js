@@ -185,7 +185,7 @@ class FixedScrollbarVirtualizedTable {
             // Преобразуем массив в строку через запятую
             const moduleIdsString = moduleIds.join(',');
 
-            const url = `${this.options.apiUrl}?session_id=${sessionId}&modules=${moduleIdsString}&limit=${this.options.limit}&offset=${startId}&direction=${direction}`;
+            const url = `${this.options.apiUrl}?id_session=${sessionId}&modules=${moduleIdsString}&limit=${this.options.limit}&offset=${startId}&direction=${direction}`;
             const response = await fetch(url);
             const result = await response.json();
 
@@ -452,7 +452,7 @@ class FixedScrollbarVirtualizedTable {
             const moduleIdsString = moduleIds.join(',');
             const direction = 'down';
 
-            const url = `${this.options.apiUrl}/datetime?session_id=${sessionId}&modules=${moduleIdsString}&limit=${this.options.limit}&datetime=${targetDatetime}&direction=${direction}`;
+            const url = `${this.options.apiUrl}/datetime?id_session=${sessionId}&modules=${moduleIdsString}&limit=${this.options.limit}&datetime=${targetDatetime}&direction=${direction}`;
 
             console.log('Executing datetime request:', targetDatetime);
             const response = await fetch(url);

@@ -474,12 +474,14 @@ class MapManager {
                     continue;
                 }
 
-                const path = this.paths.get(moduleId);
+                if (moduleData?.id_session === this.currentSession.id) {
+                    const path = this.paths.get(moduleData.id_module);
 
-                if (path) {
-                    this.updateTrace(moduleData);
-                } else {
-                    this.addOrUpdateMarker(moduleData);
+                    if (path) {
+                        this.updateTrace(moduleData);
+                    } else {
+                        this.addOrUpdateMarker(moduleData);
+                    }
                 }
             }
         });

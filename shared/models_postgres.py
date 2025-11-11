@@ -291,64 +291,64 @@ class PostgreSQLDatabaseManager:
             except Exception as e:
                 logging.error(f"Error executing init query: {e}")
 
-    def hide_session(self, session_id: int) -> bool:
+    def hide_session(self, id_session: int) -> bool:
         """
         Помечает сессию как скрытую (hidden = true)
 
-        :param session_id: ID сессии для скрытия
+        :param id_session: ID сессии для скрытия
         :return: True если операция успешна, False в случае ошибки
         """
         try:
             affected = self.db.execute(
                 "UPDATE sessions SET hidden = true WHERE id = %s",
-                params=(session_id,)
+                params=(id_session,)
             )
             return affected > 0
         except Exception as e:
-            logging.error(f"Ошибка при скрытии сессии {session_id}: {e}")
+            logging.error(f"Ошибка при скрытии сессии {id_session}: {e}")
             return False
 
-    def unhide_session(self, session_id: int) -> bool:
+    def unhide_session(self, id_session: int) -> bool:
         """
         Восстанавливает скрытую сессию
 
-        :param session_id: ID сессии для восстановления
+        :param id_session: ID сессии для восстановления
         :return: True если операция успешна, False в случае ошибки
         """
         try:
             affected = self.db.execute(
                 "UPDATE sessions SET hidden = false WHERE id = %s",
-                params=(session_id,)
+                params=(id_session,)
             )
             return affected > 0
         except Exception as e:
-            logging.error(f"Ошибка при восстановлении сессии {session_id}: {e}")
+            logging.error(f"Ошибка при восстановлении сессии {id_session}: {e}")
             return False
 
-    def delete_session_permanently(self, session_id: int) -> bool:
+    def delete_session_permanently(self, id_session: int) -> bool:
         """
         Полностью удаляет сессию и все связанные данные
 
-        :param session_id: ID сессии для удаления
+        :param id_session: ID сессии для удаления
         :return: True если операция успешна, False в случае ошибки
         """
         try:
             affected = self.db.execute(
                 "DELETE FROM sessions WHERE id = %s",
-                params=(session_id,)
+                params=(id_session,)
             )
             return affected > 0
         except Exception as e:
-            logging.error(f"Ошибка при удалении сессии {session_id}: {e}")
+            logging.error(f"Ошибка при удалении сессии {id_session}: {e}")
             return False
 
-    def parse_and_store_data(self, data_string: str, session_id: Optional[int] = None, 
+    def parse_and_store_data(self, data_string: str, id_session: Optional[int] = None, 
                            session_name: Optional[str] = "", datetime_now: Optional[str] = None) -> Union[Dict, bool]:
         """
         Парсинг и сохранение данных в PostgreSQL (полная версия)
 
         :param data_string: строка с данными для парсинга
-        :param session_id: id сессии (None - использовать последнюю не скрытую сессию)
+        :param id_session: id сессии (None - использовать последнюю не скрытую сессию)
         :param session_name: имя сессии
         :param datetime_now: опциональное время записи
         :return: Словарь с результатом или False при ошибке
@@ -423,7 +423,7 @@ class PostgreSQLDatabaseManager:
                         return False
 
                 # Получаем или создаем сессию
-                id_session = self._get_or_create_session(session_id, session_name)
+                id_session = self._get_or_create_session(id_session, session_name)
                 if not id_session:
                     logging.error("Не удалось получить или создать сессию")
                     return False
@@ -555,7 +555,7 @@ class PostgreSQLDatabaseManager:
                 'id_module': format(data['id_module'], 'X'),
                 'module_name': data['module_name'],
                 'module_color': data['module_color'],
-                'session_id': data['id_session'],
+                'id_session': data['id_session'],
                 'session_name': data['session_name'],
                 'message_type': data['id_message_type'],
                 'message_type_name': data['message_type'],
@@ -580,11 +580,11 @@ class PostgreSQLDatabaseManager:
             logging.error(f"Ошибка при получении данных по ID {data_id}: {e}")
             return None
 
-    def _get_session_by_id(self, session_id: int) -> Optional[Dict]:
+    def _get_session_by_id(self, id_session: int) -> Optional[Dict]:
         """Получение сессии по ID"""
         result = self.db.execute(
             "SELECT * FROM sessions WHERE id = %s AND hidden = false",
-            params=(session_id,),
+            params=(id_session,),
             fetch_one=True
         )
         return result
@@ -609,9 +609,9 @@ class PostgreSQLDatabaseManager:
                 )
     
                 if result:
-                    session_id = result['id']
-                    self.last_session = session_id
-                    return session_id
+                    id_session = result['id']
+                    self.last_session = id_session
+                    return id_session
                 return None
                 
             except Exception as e:
@@ -831,7 +831,7 @@ class PostgreSQLDatabaseManager:
             'points_count': len(coordinates)
         }
     
-    def get_last_message(self, session_id: int) -> List[Dict[str, Any]]:
+    def get_last_message(self, id_session: int) -> List[Dict[str, Any]]:
         """
         Возвращает последнее сообщение от каждого модуля для указанной сессии
         """
@@ -853,7 +853,7 @@ class PostgreSQLDatabaseManager:
             )
         """
         
-        last_messages = self.db.execute(last_messages_query, (session_id, session_id), fetch=True) or []
+        last_messages = self.db.execute(last_messages_query, (id_session, id_session), fetch=True) or []
         
         result = []
         for row in last_messages:
@@ -872,7 +872,7 @@ class PostgreSQLDatabaseManager:
                     ORDER BY id DESC
                     LIMIT 1
                     """,
-                    params=(session_id, row['id_module']),
+                    params=(id_session, row['id_module']),
                     fetch_one=True
                 )
                 if coord_data:
@@ -908,7 +908,7 @@ class PostgreSQLDatabaseManager:
         
         return result
 
-    def get_session_data(self, session_id: int, module_ids: List[int] = None, 
+    def get_session_data(self, id_session: int, module_ids: List[int] = None, 
                         limit: int = 100, offset: int = 0) -> Tuple[List[Dict], int, int]:
         """
         Получение данных сессии для указанных модулей с пагинацией
@@ -916,15 +916,15 @@ class PostgreSQLDatabaseManager:
         # Проверка существования сессии
         session_result = self.db.execute(
             "SELECT hidden FROM sessions WHERE id = %s",
-            params=(session_id,),
+            params=(id_session,),
             fetch_one=True
         )
     
         if not session_result:
-            raise ValueError(f"Сессия с ID {session_id} не найдена")
+            raise ValueError(f"Сессия с ID {id_session} не найдена")
     
         if session_result['hidden']:
-            raise ValueError(f"Сессия с ID {session_id} скрыта")
+            raise ValueError(f"Сессия с ID {id_session} скрыта")
     
         # Подготовка запроса в зависимости от фильтра модулей
         if module_ids:
@@ -967,13 +967,13 @@ class PostgreSQLDatabaseManager:
             LIMIT %s OFFSET %s
             """
     
-            data_params = [session_id] + module_ids + [limit, offset]
+            data_params = [id_session] + module_ids + [limit, offset]
             data = self.db.execute(data_query, data_params, fetch=True) or []
     
             # Получаем общее количество записей
             total_count_result = self.db.execute(
                 "SELECT COUNT(*) as total FROM data WHERE id_session = %s",
-                params=(session_id,),
+                params=(id_session,),
                 fetch_one=True
             )
             total_count = total_count_result['total'] if total_count_result else 0
@@ -981,7 +981,7 @@ class PostgreSQLDatabaseManager:
             # Получаем количество записей для выбранных модулей
             modules_count_result = self.db.execute(
                 f"SELECT COUNT(*) as modules_total FROM data WHERE id_session = %s AND id_module IN ({placeholders})",
-                params=[session_id] + module_ids,
+                params=[id_session] + module_ids,
                 fetch_one=True
             )
             modules_count = modules_count_result['modules_total'] if modules_count_result else 0
@@ -1017,13 +1017,13 @@ class PostgreSQLDatabaseManager:
             LIMIT %s OFFSET %s
             """
     
-            data_params = [session_id, limit, offset]
+            data_params = [id_session, limit, offset]
             data = self.db.execute(data_query, data_params, fetch=True) or []
     
             # Получаем общее количество записей
             total_count_result = self.db.execute(
                 "SELECT COUNT(*) as total FROM data WHERE id_session = %s",
-                params=(session_id,),
+                params=(id_session,),
                 fetch_one=True
             )
             total_count = total_count_result['total'] if total_count_result else 0
@@ -1033,7 +1033,7 @@ class PostgreSQLDatabaseManager:
 
     def get_session_data_centered_on_time(
         self, 
-        session_id: int, 
+        id_session: int, 
         target_datetime_unix: int,
         module_ids: List[int] = None, 
         limit: int = 100
@@ -1049,14 +1049,14 @@ class PostgreSQLDatabaseManager:
             FROM data 
             WHERE id_session = %s AND id_module IN ({placeholders}) AND datetime_unix <= %s
             """
-            position_params = [session_id] + module_ids + [target_datetime_unix]
+            position_params = [id_session] + module_ids + [target_datetime_unix]
         else:
             position_query = """
             SELECT COUNT(*) as position
             FROM data 
             WHERE id_session = %s AND datetime_unix <= %s
             """
-            position_params = [session_id, target_datetime_unix]
+            position_params = [id_session, target_datetime_unix]
 
         position_result = self.db.execute(position_query, position_params, fetch_one=True)
 
@@ -1071,7 +1071,7 @@ class PostgreSQLDatabaseManager:
 
         # Используем существующий метод для получения данных
         data, total_count, modules_count = self.get_session_data(
-            session_id=session_id,
+            id_session=id_session,
             module_ids=module_ids,
             limit=limit,
             offset=offset
@@ -1079,7 +1079,7 @@ class PostgreSQLDatabaseManager:
         
         return data, total_count, modules_count, position
 
-    def get_module_statistics(self, module_id: int, session_id: Optional[int] = None) -> Dict[str, Any]:
+    def get_module_statistics(self, module_id: int, id_session: Optional[int] = None) -> Dict[str, Any]:
         """
         Получение статистики по модулю
         """
@@ -1097,9 +1097,9 @@ class PostgreSQLDatabaseManager:
         
         params = [module_id]
         
-        if session_id:
+        if id_session:
             query += " AND id_session = %s"
-            params.append(session_id)
+            params.append(id_session)
         
         stats = self.db.execute(query, params=params, fetch_one=True) or {}
         
@@ -1113,7 +1113,7 @@ class PostgreSQLDatabaseManager:
             'avg_snr': float(stats.get('avg_snr', 0)) if stats.get('avg_snr') else None
         }
         
-    def get_session_center_radius(self, session_id: int) -> Dict[str, Any]:
+    def get_session_center_radius(self, id_session: int) -> Dict[str, Any]:
         """
         Находит минимальную окружность, охватывающую ВСЕ точки сессии
         """
@@ -1160,14 +1160,14 @@ class PostgreSQLDatabaseManager:
         FROM center c, farthest_point fp
         """
 
-        result = self.db.execute(query, params=[session_id, session_id, session_id], fetch_one=True) or {}
+        result = self.db.execute(query, params=[id_session, id_session, id_session], fetch_one=True) or {}
 
         radius_km = result.get('radius_km')
         if radius_km is not None:
             radius_km = round(float(radius_km), 4) * 2
 
         return {
-            'session_id': session_id,
+            'id_session': id_session,
             'center_lat': result.get('center_lat'),
             'center_lon': result.get('center_lon'),
             'radius_km': radius_km,
@@ -1207,16 +1207,16 @@ class PostgreSQLDatabaseManager:
     
         return 21  # Максимальный zoom
 
-    def get_session_map_view(self, session_id: int) -> Dict[str, Any]:
+    def get_session_map_view(self, id_session: int) -> Dict[str, Any]:
         """
         Получает центр, радиус и настройки карты для сессии
         """
         # Получаем данные о центре и радиусе
-        session_data = self.get_session_center_radius(session_id)
+        session_data = self.get_session_center_radius(id_session)
 
         if not session_data or session_data.get('radius_km') is None:
             return {
-                'session_id': session_id,
+                'id_session': id_session,
                 'error': 'No data available',
                 'lat': 56.4520,
                 'lon': 84.9615,
@@ -1229,7 +1229,7 @@ class PostgreSQLDatabaseManager:
         zoom = self.get_leaflet_zoom_level(radius_km)
 
         return {
-            'session_id': session_id,
+            'id_session': id_session,
             'lat': session_data['center_lat'],
             'lon': session_data['center_lon'],
             'radius_km': round(radius_km, 4),
@@ -1295,7 +1295,7 @@ class PostgreSQLDatabaseManager:
             if not last_session:
                 raise ValueError("Нет доступных сессий")
 
-            session_id = last_session['id']
+            id_session = last_session['id']
 
             # Проверяем/создаем модуль FFFF
             module_id = 0xFFFF
@@ -1316,7 +1316,7 @@ class PostgreSQLDatabaseManager:
             # Вставляем запись
             data_id = self._insert_data(
                 module_id=module_id,
-                id_session=session_id,
+                id_session=id_session,
                 message_type_code=1,
                 datetime_str=datetime_now,
                 datetime_unix=datetime_unix,

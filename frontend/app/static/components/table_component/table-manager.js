@@ -10,6 +10,8 @@ class TableManager {
         this.updateRowData = this.updateRowData.bind(this);
         this.updateDotAndTooltip = this.updateDotAndTooltip.bind(this);
 
+        this.currentSession = 0;
+
         this.startUpdatingTimes();
 
         eventBus.on(EventTypes.SOCKET.NEW_DATA_MODULE, (data) => {
@@ -17,23 +19,28 @@ class TableManager {
             this.updateTable(data.points);
         });
 
-        // Подписка на событие очистки таблицы
-        eventBus.on(EventTypes.TABLE.CLEAR, this.clearTable);
-
         // Подписка на событие загрузки новой сессии
         eventBus.on(EventTypes.SESSION.LOAD_DATA, (sessionData) => {
-            this.clearTable();
+            console.info("Table: Event SESSION.LOAD_DATA", sessionData)
             this.updateTable(sessionData["modules"]);
+        });
+
+        eventBus.on(EventTypes.SESSION.SELECTED, (session) => {
+            console.info("Table: Event SESSION.SELECTED", this.currentSession.id)
+            console.log(this.currentSession.id, session.id)
+            if (this.currentSession && this.currentSession.id !== session.id) {
+
+                this.clearTable();
+            }
+            this.currentSession = session;
         });
     }
 
     clearTable() {
+        console.info("Table: Clear table")
         const tbody = document.getElementById(this.tableId);
         tbody.innerHTML = '';
         this.tableData = {};
-
-        // Отправляем событие о очистке таблицы
-        eventBus.emit(EventTypes.TABLE.CLEARED);
     }
 
     updateTable(messages) {
@@ -42,26 +49,30 @@ class TableManager {
 
         // Обновляем хранилище данных
         messagesArray.forEach(message => {
-            this.tableData[message.id_module] = {
-                datetime: message.datetime_unix,
-                gps_ok: message.gps_ok,
-                alt: message.alt,
-                module_name: message.module_name,
-                module_color: message.module_color
+            if (message.id_session === this.currentSession.id) {
+                this.tableData[message.id_module] = {
+                    datetime: message.datetime_unix,
+                    gps_ok: message.gps_ok,
+                    alt: message.alt,
+                    module_name: message.module_name,
+                    module_color: message.module_color
+                };
             };
         });
         const tbody = document.getElementById(this.tableId);
         // Создаем или обновляем строки
         messagesArray.forEach(message => {
-            let row = tbody.querySelector(`tr[data-module-id="${message.id_module}"]`);
+            if (message.id_session === this.currentSession.id) {
 
-            if (!row) {
-                row = this.createTableRow(message);
-                tbody.appendChild(row);
-                // Убираем прямой вызов initTooltip, так как он уже вызывается в updateDotAndTooltip
-            } else {
-                this.updateRowData(row, message);
-            }
+                let row = tbody.querySelector(`tr[data-module-id="${message.id_module}"]`);
+
+                if (!row) {
+                    row = this.createTableRow(message);
+                    tbody.appendChild(row);
+                } else {
+                    this.updateRowData(row, message);
+                }
+            };
         });
     }
 
@@ -281,30 +292,49 @@ class TableManager {
     }
 
     getStatusColor(gpsOk, unixTimestamp) {
-        const now = Math.floor(Date.now() / 1000); // Текущее время в UNIX (секунды)
-        // Приводим timestamp к числу и работаем только с UNIX-форматом
-        const timestamp = typeof unixTimestamp === 'string' ? parseInt(unixTimestamp) : unixTimestamp;
-        const diffSeconds = now - timestamp;
+        const now = Date.now(); // всегда в миллисекундах
+        let timestamp = typeof unixTimestamp === 'string' ? parseInt(unixTimestamp) : unixTimestamp;
+
+        // Определяем формат timestamp и конвертируем в миллисекунды
+        if (timestamp < 100000000000) {
+            // Если timestamp в секундах (меньше 100000000000)
+            timestamp = timestamp * 1000;
+        }
+        // Если timestamp уже в миллисекундах, оставляем как есть
+
+        const diffSeconds = (now - timestamp) / 1000;
 
         if (gpsOk) {
-            if (diffSeconds < 60) return '#4CAF50';  // зелёный
-            if (diffSeconds < 300) return '#FFC107'; // жёлтый
-            return '#F44336';                        // красный
+            if (diffSeconds < 60) {
+                return '#4CAF50';
+            }
+            if (diffSeconds < 300) {
+                return '#FFC107';
+            }
+            return '#F44336';
         } else {
-            if (diffSeconds < 60) return '#2196F3';  // синий
-            if (diffSeconds < 300) return '#FFC107'; // жёлтый
-            return '#F44336';                        // красный
+            if (diffSeconds < 60) {
+                return '#2196F3';
+            }
+            if (diffSeconds < 300) {
+                return '#FFC107';
+            }
+            return '#F44336';
         }
     }
 
     getTooltipText(gpsOk, unixTimestamp) {
-        const now = new Date();
-        // Конвертируем Unix-время в миллисекунды, если нужно
-        const timestamp = typeof unixTimestamp === 'string' && unixTimestamp.length <= 10
-            ? unixTimestamp * 1000
-            : unixTimestamp;
-        const msgTime = new Date(timestamp);
-        const diffSeconds = (now - msgTime) / 1000;
+        const now = Date.now(); // всегда в миллисекундах
+        let timestamp = typeof unixTimestamp === 'string' ? parseInt(unixTimestamp) : unixTimestamp;
+
+        // Определяем формат timestamp и конвертируем в миллисекунды
+        if (timestamp < 100000000000) {
+            // Если timestamp в секундах (меньше 100000000000)
+            timestamp = timestamp * 1000;
+        }
+        // Если timestamp уже в миллисекундах, оставляем как есть
+
+        const diffSeconds = (now - timestamp) / 1000;
 
         if (gpsOk) {
             if (diffSeconds < 60) return 'Статус: Активен\nДанные свежие (<60 сек)';
