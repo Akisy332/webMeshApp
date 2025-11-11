@@ -3,9 +3,19 @@ from flask import Flask
 from flask_socketio import SocketIO
 import os
 import logging
+import time
 
 # Настройка логирования
-logging.basicConfig(level=logging.INFO)
+# Настройка логирования
+
+logging.basicConfig(
+    level=getattr(logging, "INFO"),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+
 logger = logging.getLogger('frontend')
 
 app = Flask(__name__, 
@@ -14,42 +24,84 @@ app = Flask(__name__,
 
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'mysecretkey')
 
-socketio = SocketIO(app, cors_allowed_origins="*", ping_interval=25, ping_timeout=5)
+socketio = SocketIO(app, 
+                    cors_allowed_origins="*", 
+                    ping_interval=25, 
+                    ping_timeout=5,
+                    async_mode='threading',
+                    # logger=True,
+                    # engineio_logger=True
+                    )   
 
-# Инициализация Redis-WebSocket моста (отложенная)
+# Инициализация Redis-WebSocket моста
 redis_bridge = None
+app_initialized = False
+
+def start_redis_bridge():
+    """Запуск Redis моста"""
+    global redis_bridge
+    if redis_bridge and not redis_bridge.running:
+        try:
+            logger.info("🔄 Starting Redis bridge...")
+            redis_bridge.start()
+            logger.info("Redis bridge started successfully")
+        except Exception as e:
+            logger.error(f"Failed to start Redis bridge: {e}")
 
 def initialize_redis_bridge():
-    """Инициализация Redis моста при первом запросе"""
-    global redis_bridge
-    if redis_bridge is None:
-        try:
-            from .redis_websocket_bridge import RedisWebSocketBridge
-            redis_bridge = RedisWebSocketBridge(socketio)
-            redis_bridge.start()
-            logger.info("Redis-WebSocket bridge initialized")
-        except Exception as e:
-            logger.error(f"Failed to initialize Redis bridge: {e}")
+    """Инициализация Redis моста - вызывается один раз при старте"""
+    global redis_bridge, app_initialized
+    
+    if app_initialized:
+        return
+        
+    logger.info("INIT: Starting application initialization...")
+    
+    try:
+        from .redis_websocket_bridge import RedisWebSocketBridge
+        redis_bridge = RedisWebSocketBridge(socketio)
+        logger.info("INIT: Redis-WebSocket bridge instance created")
+        
+        # НЕ запускаем автоматически - запустим при первом WebSocket подключении
+        start_redis_bridge()
+        app_initialized = True
+        logger.info("INIT: Application initialization completed")
+        
+    except Exception as e:
+        logger.error(f"INIT: Failed to initialize Redis bridge: {e}")
+        app_initialized = True
+        
 
-@app.before_request
-def before_first_request():
-    """Инициализация при первом запросе"""
-    if not hasattr(app, 'redis_initialized'):
-        initialize_redis_bridge()
-        app.redis_initialized = True
 
-# Инициализация маршрутов
-from . import routes
+
+# Инициализация при импорте модуля
+logger.info("Module imported - initializing Redis bridge...")
+initialize_redis_bridge()
 
 @app.route('/health')
 def health():
     return "Frontend static server is running"
 
+@app.route('/debug-bridge')
+def debug_bridge():
+    """Endpoint для отладки Redis bridge"""
+    global redis_bridge
+    status = {
+        'bridge_exists': redis_bridge is not None,
+        'bridge_running': redis_bridge.running if redis_bridge else False,
+        'redis_connected': redis_bridge.is_connected() if redis_bridge else False,
+    }
+    return status
+
 # WebSocket события
 @socketio.on('connect')
 def handle_connect():
-    logger.info('Client connected')
-    socketio.emit('status', {'message': 'Connected to server'})
+    logger.info('Client connected via WebSocket')
+    try:
+        socketio.emit('status', {'message': 'Connected to server', 'type': 'connection'})
+        
+    except Exception as e:
+        logger.error(f"Error in connect handler: {e}")
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -68,3 +120,6 @@ def not_found(error):
 @app.errorhandler(500)
 def internal_error(error):
     return {"error": "Internal server error"}, 500
+
+# Инициализация маршрутов
+from . import routes

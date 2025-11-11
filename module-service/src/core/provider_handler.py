@@ -8,7 +8,7 @@ from .parser import parse_message, HopData
 import json
 from shared.redis_client import get_redis_client
 
-def handle_provider(conn, address, db_client):
+def handle_provider(conn, address):
     client_info = f"{address[0]}:{address[1]}"
     log_message('INFO', f"New provider connection", client_info)
     
@@ -32,7 +32,7 @@ def handle_provider(conn, address, db_client):
                 'status': 'connected'
             })
 
-            handle_data_provider(conn, address, data_byte, db_client)
+            handle_data_provider(conn, address, data_byte)
         else:
             hex_data = data_byte.hex()
             log_message('WARNING', f"Invalid start packet format", client_info)
@@ -45,7 +45,7 @@ def handle_provider(conn, address, db_client):
         except:
             pass
 
-def handle_data_provider(conn, address, initial_bytes_data, db_client):
+def handle_data_provider(conn, address, initial_bytes_data):
     client_info = f"{address[0]}:{address[1]}"
     scet = 0
     data_byte = initial_bytes_data
@@ -64,13 +64,10 @@ def handle_data_provider(conn, address, initial_bytes_data, db_client):
                 log_message("INFO", f"Provider disconnected properly", client_info)
                 break
 
-            # Форматируем HEX для логов
             hex_with_spaces = ' '.join(hex_data[i:i+2] for i in range(0, len(hex_data), 2))
-            
-            # Логируем только HEX
             log_message("INFO", f"HEX Data: {hex_with_spaces}", client_info)
 
-            # Парсим сообщение для отображения на сайте
+            # Парсинг сообщения
             hops, errors = parse_message(data_byte)
             
             # Формируем данные для веб-интерфейса
@@ -95,39 +92,53 @@ def handle_data_provider(conn, address, initial_bytes_data, db_client):
             # Сохраняем в историю для веб-интерфейса
             ConnectionService.add_parsed_message(parsed_data)
             
-            # Формируем данные для Redis
-            redis_message = {
-                'type': 'module_data',
-                'data': {
-                    'hops': [
-                        {
-                            'module_num': hop.module_num,
-                            'lat': hop.lat,
-                            'lng': hop.lng, 
-                            'altitude': hop.altitude,
-                            'speed': hop.speed,
-                            'roc': hop.roc
-                        } for hop in hops
-                    ],
-                    'errors': errors,
-                    'packet_number': scet,
-                    'timestamp': time_stamp.isoformat(),
+            if not errors:
+                # ВАЛИДНЫЕ данные - отправляем только распарсенные значения
+                redis_message = {
+                    'type': 'valid_module_data',
+                    'data': {
+                        'hops': [
+                            {
+                                'module_num': hop.module_num,
+                                'lat': hop.lat,
+                                'lng': hop.lng, 
+                                'altitude': hop.altitude,
+                                'speed': hop.speed,
+                                'roc': hop.roc
+                            } for hop in hops
+                        ],
+                        'packet_number': scet
+                    },
                     'provider': client_info,
-                    'hex_data': hex_with_spaces  # оставляем для логов
-                },
-                'provider': client_info,
-                'timestamp': time_stamp.isoformat()
-            }
-            redis_client.publish('module_updates', redis_message)
-            
-            # Асинхронная отправка в DB Service
-            db_client.send_message({
-                'provider_address': client_info,
-                'hex_data': hex_data,
-                'parsed_data': parsed_data,
-                'packet_number': scet,
-                'timestamp': time_stamp.isoformat()
-            })
+                    'timestamp': time_stamp.isoformat()
+                }
+                redis_client.publish('module_data', redis_message)
+            else:
+                # НЕВАЛИДНЫЕ данные - отправляем с причиной ошибки и сырыми данными
+                corrupted_message = {
+                    'type': 'corrupted_module_data',
+                    'data': {
+                        'raw_hex': hex_data,  # Сохраняем сырые данные для анализа
+                        'parsed_attempt': {
+                            'hops': [
+                                {
+                                    'module_num': hop.module_num,
+                                    'lat': hop.lat,
+                                    'lng': hop.lng, 
+                                    'altitude': hop.altitude,
+                                    'speed': hop.speed,
+                                    'roc': hop.roc
+                                } for hop in hops
+                            ] if hops else []
+                        },
+                        'errors': errors,  # Детальная причина ошибки
+                        'packet_number': scet
+                    },
+                    'error_reason': errors[0] if errors else 'Unknown parsing error',
+                    'provider': client_info,
+                    'timestamp': time_stamp.isoformat()
+                }
+                redis_client.publish('corrupted_data', corrupted_message)
             
             ConnectionService.update_module_activity(client_info)
             
@@ -144,10 +155,22 @@ def handle_data_provider(conn, address, initial_bytes_data, db_client):
                 log_message("INFO", f"Provider disconnected", client_info)
                 break
                 
-    except ConnectionResetError:
-        log_message("WARNING", f"Provider disconnected abruptly", client_info)
     except Exception as e:
-        log_message("WARNING", f"Error with provider: {e}", client_info)        
+        # КРИТИЧЕСКИЕ ошибки (сбой парсера)
+        critical_error_message = {
+            'type': 'critical_corrupted_data',
+            'data': {
+                'raw_hex': data_byte.hex() if data_byte else '',
+                'errors': [f'Parser crash: {str(e)}'],
+                'timestamp': datetime.now().isoformat(),
+                'provider': client_info
+            },
+            'error_reason': 'parser_crash',
+            'provider': client_info,
+            'timestamp': datetime.now().isoformat()
+        }
+        redis_client.publish('corrupted_data', critical_error_message)
+        log_message("ERROR", f"Critical parser error: {e}", client_info)
     finally:
         log_message("INFO", f"Provider disconnected: {client_info}", client_info)
         ConnectionService.remove_provider(client_info)

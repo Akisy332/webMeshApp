@@ -52,14 +52,23 @@ class RedisClient:
             if not self.is_connected():
                 self._connect()
                 if not self.is_connected():
+                    logger.error("Cannot publish - no Redis connection")
                     return False
-            
-            result = self.client.publish(
-                channel, 
-                json.dumps(message, ensure_ascii=False)
-            )
-            logger.debug(f"📤 Published to {channel}: {result} subscribers")
-            return result > 0
+
+            message_json = json.dumps(message, ensure_ascii=False)
+
+            # Redis publish возвращает КОЛИЧЕСТВО подписчиков
+            subscribers_count = self.client.publish(channel, message_json)
+
+            logger.info(f"Published to {channel}: {subscribers_count} subscribers")
+
+            # УСПЕХ: сообщение доставлено (даже если подписчиков нет)
+            # Но логируем предупреждение если никто не слушает
+            if subscribers_count == 0:
+                logger.warning(f"Message published to '{channel}' but no active subscribers")
+
+            return True  # Сообщение успешно опубликовано в Redis
+
         except Exception as e:
             logger.error(f"Redis publish error: {e}")
             return False
@@ -77,7 +86,7 @@ class RedisClient:
             
             # Запускаем в отдельном потоке
             thread = pubsub.run_in_thread(sleep_time=0.001)
-            logger.info(f"📥 Subscribed to channel: {channel}")
+            logger.info(f"Subscribed to channel: {channel}")
             return thread
         except Exception as e:
             logger.error(f"Redis subscribe error: {e}")
@@ -86,23 +95,38 @@ class RedisClient:
     def listen_messages(self, channel: str, timeout: int = 1):
         """Слушатель сообщений (для синхронного использования)"""
         try:
+            logger.info(f"LISTEN_MESSAGES: Starting to listen on channel '{channel}'")
+
             if not self.is_connected():
                 self._connect()
                 if not self.is_connected():
+                    logger.error("LISTEN_MESSAGES: No Redis connection")
                     return
-            
+
             pubsub = self.client.pubsub()
             pubsub.subscribe(channel)
-            pubsub.get_message(timeout=timeout)  # пропускаем subscribe сообщение
-            
+            logger.info(f"LISTEN_MESSAGES: Subscribed to {channel}")
+
+            # Пропускаем subscribe сообщение
+            subscribe_msg = pubsub.get_message(timeout=timeout)
+            logger.info(f"LISTEN_MESSAGES: Subscribe message: {subscribe_msg}")
+
             while True:
                 message = pubsub.get_message(timeout=timeout)
+                logger.debug(f"LISTEN_MESSAGES: Raw message: {message}")
+
                 if message and message['type'] == 'message':
-                    data = json.loads(message['data'])
-                    yield data
-                    
+                    try:
+                        data = json.loads(message['data'])
+                        logger.info(f"LISTEN_MESSAGES: Parsed message type: {data.get('type')}")
+                        yield data
+                    except json.JSONDecodeError as e:
+                        logger.error(f"LISTEN_MESSAGES: JSON decode error: {e}")
+                elif message:
+                    logger.debug(f"LISTEN_MESSAGES: Other message type: {message['type']}")
+
         except Exception as e:
-            logger.error(f"Redis listen error: {e}")
+            logger.error(f"LISTEN_MESSAGES: Error: {e}")
             yield from []
 
 # Глобальный экземпляр

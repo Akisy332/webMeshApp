@@ -16,6 +16,7 @@ http:
     cors:
       headers:
         accesscontrolallowmethods: "*"
+        accessControlAllowOrigin: "*"
         accesscontrolalloworiginlist: "*"
         accesscontrolmaxage: 100
         addvaryheader: true
@@ -25,3 +26,9 @@ http:
       stripPrefix:
         prefixes:
           - "/api/auth"
+
+    # Middleware для WebSocket (StripPrefix для избежания конфликтов)
+    websocket-strip:
+      stripPrefix:
+        prefixes:
+          - "/socket.io"

@@ -48,39 +48,74 @@ class RedisSubscriber:
         """Прослушивание сообщений из Redis"""
         while self.running:
             try:
-                logger.info("Listening for Redis messages on channel 'module_updates'")
+                logger.info("Listening for Redis messages on channels: 'module_data', 'corrupted_data'")
 
-                for message in self.redis_client.listen_messages('module_updates'):
+                # Слушаем оба канала поочередно
+                for message in self.redis_client.listen_messages('module_data', timeout=1):
                     if not self.running:
                         break
-                    
-                    logger.info(f"RECEIVED Redis message type: {message.get('type', 'unknown')}")
-                    self._process_message(message)
+                    logger.info(f"RECEIVED valid data message")
+                    self._process_valid_message(message)
+
+                for message in self.redis_client.listen_messages('corrupted_data', timeout=1):
+                    if not self.running:
+                        break
+                    logger.warning(f"RECEIVED corrupted data message")
+                    self._process_corrupted_message(message)
 
             except Exception as e:
                 logger.error(f"Redis listener error: {e}")
                 import time
                 time.sleep(5)
     
-    def _process_message(self, message: dict):
-        """Обработка входящего сообщения"""
+    def _process_valid_message(self, message: dict):
+        """Обработка ВАЛИДНЫХ данных"""
         try:
             message_type = message.get('type')
 
-            if message_type == 'module_data':
+            if message_type == 'valid_module_data':
                 data = message.get('data', {})
-                self._process_module_data(data)
+                self._process_valid_module_data(data)
             else:
-                logger.warning(f"Unknown message type: {message_type}")
-            
+                logger.warning(f"Unknown valid message type: {message_type}")
+
         except Exception as e:
-            logger.error(f"Error processing Redis message: {e}")
+            logger.error(f"Error processing valid message: {e}")
+
+    def _process_corrupted_message(self, message: dict):
+        """Обработка НЕВАЛИДНЫХ/битых данных"""
+        try:
+            message_type = message.get('type')
+            data = message.get('data', {})
+            error_reason = message.get('error_reason', 'unknown_error')
+
+            logger.warning(f"Processing corrupted data, reason: {error_reason}")
+
+            # Сохраняем в отдельную таблицу битых данных
+            corrupted_record = {
+                'raw_hex': data.get('raw_hex', ''),
+                'parsed_attempt': data.get('parsed_attempt', {}),
+                'errors': data.get('errors', []),
+                'error_reason': error_reason,
+                'provider': data.get('provider', ''),
+                'packet_number': data.get('packet_number', 0),
+                'timestamp': data.get('timestamp', datetime.now().isoformat()),
+                'message_type': message_type
+            }
+
+            # Сохраняем в БД битых данных
+            # self.db_manager.save_corrupted_data(corrupted_record)
+
+            logger.info(f"Corrupted data saved to database: {error_reason}")
+
+        except Exception as e:
+            logger.error(f"Error processing corrupted data: {e}")
     
-    def _process_module_data(self, data: dict):
-        """Обработка данных модуля"""
+    def _process_valid_module_data(self, data: dict):
+        """Обработка ВАЛИДНЫХ данных модуля"""
         try:
             hops = data.get('hops', [])
-            logger.info(f"Processing module data with {len(hops)} hops")
+            logger.info(f"Processing VALID module data with {len(hops)} hops")
 
             # Детальное логирование всех хопов
             for i, hop in enumerate(hops):
@@ -129,19 +164,39 @@ class RedisSubscriber:
                 logger.error("Failed to save data to database")
                 return
 
-            # Отправляем во фронтенд
+            # Подготовка сообщения
             frontend_message = {
-                'type': 'module_update', 
+                'type': 'module_data', 
                 'data': saved_data,
                 'session_id': session_id,
-                'timestamp': data.get('timestamp')
+                'timestamp': data.get('timestamp'),
+                'test_diagnostic': True
             }
 
-            success = self.redis_client.publish('frontend_updates', frontend_message)
-            if success:
-                logger.info(f"📤 Data forwarded to frontend for session {session_id}")
-            else:
-                logger.warning("Failed to forward data to frontend")
+            # Публикация с перехватом исключений
+            try:
+                success = self.redis_client.publish('frontend_updates', frontend_message)
+                logger.info(f"Redis publish() returned: {success} (type: {type(success)})")
+
+                if success is True:
+                    logger.info("publish() returned True")
+                elif success is False:
+                    logger.error("publish() returned False")
+                elif isinstance(success, int):
+                    logger.info(f"publish() returned integer: {success} subscribers")
+                    if success == 0:
+                        logger.warning("No subscribers on channel 'frontend_updates'")
+                    else:
+                        logger.info(f"Message delivered to {success} subscribers")
+                else:
+                    logger.warning(f"Unexpected return type: {success}")
+
+            except Exception as pub_e:
+                logger.error(f"Redis publish() exception: {pub_e}")
+                success = False
+
+            if not success:
+                logger.warning("Failed to forward valid data to frontend")
 
         except Exception as e:
-            logger.error(f"Error processing module data: {e}")
+            logger.error(f"Error in _process_valid_module_data: {e}")

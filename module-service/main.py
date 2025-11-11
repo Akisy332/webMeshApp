@@ -3,10 +3,9 @@ import time
 import threading
 import signal
 import sys
+
 from src.core.server import ProviderServer
 from src.api.routes import create_app
-from src.services.db_client import DBClient
-from src.database.models import init_db
 from src.utils.logger import setup_logging, log_message
 from src.utils.health_check import start_health_check
 from config.settings import settings
@@ -24,17 +23,8 @@ def main():
     try:
         log_message('INFO', f"Starting {settings.SERVICE_NAME} v{settings.SERVICE_VERSION}")
         
-        # Инициализация базы данных
-        log_message('INFO', "Initializing PostgreSQL database...")
-        init_db()
-        log_message('INFO', "Database initialized successfully")
-        
-        # Инициализация DB клиента
-        db_client = DBClient()
-        db_client.start()
-        
         # Запуск TCP сервера
-        provider_server = ProviderServer(db_client=db_client)
+        provider_server = ProviderServer()
         provider_thread = threading.Thread(target=provider_server.start)
         provider_thread.daemon = True
         provider_thread.start()

@@ -5,10 +5,9 @@ from src.utils.logger import log_message
 from config.settings import settings
 
 class ProviderServer:
-    def __init__(self, host=None, port=None, db_client=None):
+    def __init__(self, host=None, port=None):
         self.host = host or settings.HOST
         self.port = port or settings.PROVIDER_PORT
-        self.db_client = db_client
         self.server_socket = None
         self.running = False
         self.provider_connections = []
@@ -30,7 +29,7 @@ class ProviderServer:
 
                     provider_thread = threading.Thread(
                         target=handle_provider, 
-                        args=(conn, address, self.db_client)
+                        args=(conn, address)
                     )
                     provider_thread.daemon = True
                     provider_thread.start()

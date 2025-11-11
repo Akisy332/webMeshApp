@@ -2,7 +2,6 @@ from flask import Flask, jsonify, request, render_template, send_file
 import os
 from src.services.provider_service import ProviderService
 from src.services.connection_service import ConnectionService
-from src.database.models import get_db_session, ProviderMessage
 from src.utils.logger import get_all_logs, get_log_files_info
 from config.settings import settings
 
@@ -57,17 +56,6 @@ def create_app():
         limit = request.args.get('limit', 100, type=int)
         messages = ConnectionService.get_parsed_messages(limit=limit)
         return jsonify(messages)
-
-    @app.route('/api/v1/db/messages')
-    def get_db_messages():
-        """API для получения сообщений из PostgreSQL"""
-        limit = request.args.get('limit', 100, type=int)
-        db = get_db_session()
-        try:
-            messages = db.query(ProviderMessage).order_by(ProviderMessage.created_at.desc()).limit(limit).all()
-            return jsonify([msg.to_dict() for msg in messages])
-        finally:
-            db.close()
 
     @app.route('/api/v1/parsed_data/clear')
     def clear_parsed_data():

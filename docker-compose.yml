@@ -178,10 +178,16 @@ services:
       - webmesh-network
     labels:
       - "traefik.enable=true"
+    
+      # Основной маршрут для всего frontend
       - "traefik.http.routers.frontend.entrypoints=web"
-      - "traefik.http.routers.frontend.rule=PathPrefix(`/`) && !PathPrefix(`/api/`)"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
       - "traefik.http.services.frontend.loadbalancer.server.port=5000"
       - "traefik.http.routers.frontend.middlewares=cors@file"
+      
+      # Специальные настройки для WebSocket
+      - "traefik.http.services.frontend.loadbalancer.server.scheme=http"
+      - "traefik.http.services.frontend.loadbalancer.passHostHeader=true"
 
 networks:
   webmesh-network:
