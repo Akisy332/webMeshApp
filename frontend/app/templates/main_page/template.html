@@ -1,16 +1,12 @@
 {% extends "base/base.html" %}
 
 {% block body %}
-
-<!-- Auth Modals Container -->
-<div id="auth-modals-container">
-    <!-- Формы будут добавляться сюда -->
-</div>
+<!-- Контейнер модального окна авторизации -->
+<div id="auth-modals-container"></div>
 
 <!-- Скрывающаяся панель с таблицей -->
 <div class="slide-panel" id="slidePanel">
     <div class="panel-content">
-        <!-- Здесь будет загружена таблица через Blueprint -->
         <div id="table-content"></div>
     </div>
 </div>
@@ -22,34 +18,7 @@
         <div class="bg-light border-end h-100" id="debug-panel" style="width: 300px; overflow-y: auto;">
             <div class="p-3">
                 <h6 class="fw-bold mb-3 text-center">Панель отладки</h6>
-
-                <!-- Блок аутентификации -->
-                <div class="mb-3 p-2 border rounded bg-white">
-                    <div id="auth-status" class="text-center small mb-2">
-                        <span class="badge bg-secondary">Не авторизован</span>
-                    </div>
-                    <div id="auth-buttons">
-                        <button class="btn btn-sm btn-outline-primary w-100 mb-1" id="auth-login-btn">
-                            Войти
-                        </button>
-                        <button class="btn btn-sm btn-outline-success w-100" id="auth-register-btn">
-                            Регистрация
-                        </button>
-                    </div>
-                    <div id="user-menu" style="display: none;">
-                        <div class="text-center small mb-2">
-                            <span class="fw-semibold" id="user-greeting"></span>
-                            <span class="badge bg-danger ms-1" id="admin-badge" style="display: none;">ADMIN</span>
-                        </div>
-                        <button class="btn btn-sm btn-outline-secondary w-100 mb-1" id="auth-profile-btn">
-                            Профиль
-                        </button>
-                        <button class="btn btn-sm btn-outline-danger w-100" id="auth-logout-btn">
-                            Выйти
-                        </button>
-                    </div>
-                </div>
-
+                
                 <!-- Кнопки управления -->
                 <div class="mb-3">
                     <button class="btn btn-sm btn-outline-primary w-100 mb-2" id="debug-test-btn">
@@ -223,7 +192,6 @@
     </div>
 </div>
 
-<!-- HTML файл -->
 <!-- Модальное окно для работы с сессиями -->
 <div class="modal fade" id="sessionModal" tabindex="-1" aria-labelledby="sessionModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -324,266 +292,13 @@
 {% endblock %}
 
 {% block styles %}
-
-<link href="static/components/main_page/styles.css" rel="stylesheet" />
-<link href="static/components/slide_panel/slide-panel.css" rel="stylesheet" />
-<link href="static/components/auth/auth-styles.css" rel="stylesheet" />
-
-<style>
-
-</style>
+<link href="/static/components/main_page/styles.css" rel="stylesheet" />
+<link href="/static/components/slide_panel/slide-panel.css" rel="stylesheet" />
+<link href="/static/components/auth/auth-styles.css" rel="stylesheet" />
 {% endblock %}
 
-<!--  -->
 {% block scripts %}
+<!-- TypeScript модуль -->
+<script src="/static/dist/main.js" type="module" defer></script>
 
-<!-- Auth System -->
-<script src="static/components/auth/navbar.js"></script>
-<script src="static/components/auth/auth-manager.js"></script>
-<script src="static/components/auth/login-form.js"></script>
-<script src="static/components/auth/register-form.js"></script>
-
-<!-- подключение скрипта карты leaflet -->
-<script type="text/javascript" src="static/components/map_component/map-manager.js"></script>
-
-<!-- подключение скрипта таблицы пользователей -->
-<script type="text/javascript" src="static/components/table_component/table-manager.js"></script>
-
-<!-- подключение скрипта иницилизации списка сессий -->
-<script type="text/javascript" src="static/components/session_manager/session-list.js"></script>
-
-<!-- подключение скрипта иницилизации модального окна сессий -->
-<script type="text/javascript" src="static/components/session_manager/modal-window.js"></script>
-
-<!-- подключение скрипта иницилизации главной страницы -->
-<script type="text/javascript" src="static/components/main_page/scripts.js"></script>
-
-<!-- подключение скрипта иницилизации панели отладки -->
-<script type="text/javascript" src="static/components/debug_panel/debug-panel.js"></script>
-
-<!-- подключение скрипта ползунка маршрута по времени-->
-<script type="text/javascript" src="static/components/time_slider/time-range-slider.js"></script>
-
-<script type="text/javascript" src="static/components/slide_panel/slide-panel.js"></script>
-
-<script>
-    // Интеграция аутентификации с существующей системой
-    document.addEventListener('DOMContentLoaded', function () {
-        // Инициализация форм аутентификации
-        const loginForm = new LoginForm('auth-modals-container');
-        const registerForm = new RegisterForm('auth-modals-container');
-
-        setupAuthEventHandlers();
-
-        // Функция обновления UI состояния аутентификации
-        function updateAuthUI() {
-            const isAuthenticated = authManager.isAuthenticated();
-            const user = authManager.getCurrentUser();
-        
-            // Принудительно обновляем навигационную панель
-            if (window.authNavbar) {
-                authNavbar.forceUpdateAuthState();
-            }
-            
-            // Безопасное обновление панели отладки
-            const authStatus = document.getElementById('auth-status');
-            const authButtons = document.getElementById('auth-buttons');
-            const userMenu = document.getElementById('user-menu');
-            const userGreeting = document.getElementById('user-greeting');
-            const adminBadge = document.getElementById('admin-badge');
-        
-            if (authStatus) {
-                authStatus.innerHTML = isAuthenticated ? 
-                    `<span class="badge bg-success">Авторизован</span>` : 
-                    `<span class="badge bg-secondary">Не авторизован</span>`;
-            }
-        
-            if (authButtons) authButtons.style.display = isAuthenticated ? 'none' : 'block';
-            if (userMenu) userMenu.style.display = isAuthenticated ? 'block' : 'none';
-        
-            if (isAuthenticated && user) {
-                if (userGreeting) userGreeting.textContent = user.username;
-                if (adminBadge) {
-                    const isAdmin = user.role === 'admin' || user.role === 'developer';
-                    adminBadge.style.display = isAdmin ? 'inline' : 'none';
-                }
-            }
-        
-            // Обновление доступности функций
-            updateFeatureAccessibility(isAuthenticated);
-        }
-
-        // Безопасные обработчики событий
-        function setupAuthEventHandlers() {
-            // Навигационная панель
-            const navLoginBtn = document.getElementById('nav-login-btn');
-            const navRegisterBtn = document.getElementById('nav-register-btn');
-            const navLogoutBtn = document.getElementById('nav-logout-btn');
-            const navProfileBtn = document.getElementById('nav-profile-btn');
-        
-            if (navLoginBtn) {
-                navLoginBtn.addEventListener('click', () => {
-                    registerForm.hide();
-                    loginForm.show();
-                });
-            }
-        
-            if (navRegisterBtn) {
-                navRegisterBtn.addEventListener('click', () => {
-                    loginForm.hide();
-                    registerForm.show();
-                });
-            }
-        
-            if (navLogoutBtn) {
-                navLogoutBtn.addEventListener('click', async () => {
-                    if (confirm('Вы уверены, что хотите выйти?')) {
-                        await authManager.logout();
-                    }
-                });
-            }
-        
-            if (navProfileBtn) {
-                navProfileBtn.addEventListener('click', () => {
-                    if (window.showNotification) {
-                        window.showNotification('Функция профиля в разработке', 'info');
-                    }
-                });
-            }
-        
-            // Панель отладки
-            const authLoginBtn = document.getElementById('auth-login-btn');
-            const authRegisterBtn = document.getElementById('auth-register-btn');
-            const authLogoutBtn = document.getElementById('auth-logout-btn');
-            const authProfileBtn = document.getElementById('auth-profile-btn');
-        
-            if (authLoginBtn) {
-                authLoginBtn.addEventListener('click', () => loginForm.show());
-            }
-        
-            if (authRegisterBtn) {
-                authRegisterBtn.addEventListener('click', () => registerForm.show());
-            }
-        
-            if (authLogoutBtn) {
-                authLogoutBtn.addEventListener('click', async () => {
-                    if (confirm('Вы уверены, что хотите выйти?')) {
-                        await authManager.logout();
-                    }
-                });
-            }
-        
-            if (authProfileBtn) {
-                authProfileBtn.addEventListener('click', () => {
-                    if (window.showNotification) {
-                        window.showNotification('Функция профиля в разработке', 'info');
-                    }
-                });
-            }
-        }
-
-        // Обновление доступности функций
-        function updateFeatureAccessibility(isAuthenticated) {
-            const protectedElements = document.querySelectorAll('[data-requires-auth]');
-            protectedElements.forEach(element => {
-                if (isAuthenticated) {
-                    element.classList.remove('disabled');
-                    element.disabled = false;
-                } else {
-                    element.classList.add('disabled');
-                    element.disabled = true;
-                }
-            });
-
-            // Показываем уведомления для защищенных функций
-            if (!isAuthenticated) {
-                addAuthTooltips();
-            }
-        }
-
-        // Добавление подсказок для защищенных функций
-        function addAuthTooltips() {
-            const protectedButtons = document.querySelectorAll('#add-data, #createNewSession');
-            protectedButtons.forEach(button => {
-                button.title = 'Требуется авторизация';
-                button.addEventListener('click', function (e) {
-                    if (!authManager.isAuthenticated()) {
-                        e.preventDefault();
-                        showAuthRequiredNotification();
-                    }
-                });
-            });
-        }
-
-        // Показ уведомления о необходимости авторизации
-        function showAuthRequiredNotification() {
-            if (window.showNotification) {
-                window.showNotification('Для выполнения этого действия требуется авторизация', 'warning');
-            } else {
-                alert('Для выполнения этого действия требуется авторизация');
-            }
-            document.dispatchEvent(new CustomEvent('auth:show-login'));
-        }
-
-        // Глобальные обработчики событий для форм
-        document.addEventListener('auth:show-login', () => loginForm.show());
-        document.addEventListener('auth:show-register', () => registerForm.show());
-
-        // Слушаем события аутентификации
-        document.addEventListener('auth:login', updateAuthUI);
-        document.addEventListener('auth:logout', updateAuthUI);
-
-        // Простая система уведомлений (если не существует)
-        if (!window.showNotification) {
-            window.showNotification = function (message, type = 'info') {
-                // Создаем временное уведомление
-                const notification = document.createElement('div');
-                notification.className = `alert alert-${type} position-fixed`;
-                notification.style.cssText = `
-                top: 20px;
-                right: 20px;
-                z-index: 9999;
-                min-width: 300px;
-                animation: slideInRight 0.3s ease-out;
-            `;
-                notification.textContent = message;
-
-                document.body.appendChild(notification);
-
-                // Автоудаление через 5 секунд
-                setTimeout(() => {
-                    notification.style.animation = 'slideOutRight 0.3s ease-in';
-                    setTimeout(() => {
-                        if (notification.parentNode) {
-                            notification.parentNode.removeChild(notification);
-                        }
-                    }, 300);
-                }, 5000);
-            };
-
-            // Добавляем CSS анимации
-            const style = document.createElement('style');
-            style.textContent = `
-            @keyframes slideInRight {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-            @keyframes slideOutRight {
-                from { transform: translateX(0); opacity: 1; }
-                to { transform: translateX(100%); opacity: 0; }
-            }
-        `;
-            document.head.appendChild(style);
-        }
-
-        // Инициализация UI при загрузке
-        setTimeout(updateAuthUI, 100);
-
-        console.log('🔐 Система аутентификации интегрирована');
-    });
-    
-
-    // Расширение функциональности для работы с аутентификацией
-    // Можно добавить в существующие менеджеры проверки аутентификации
-</script>
 {% endblock %}

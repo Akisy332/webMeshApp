@@ -1,21 +1,24 @@
-/**
- * Login Form Component
- */
-class LoginForm {
-    constructor(containerId) {
-        this.container = document.getElementById(containerId);
+import { AuthService } from '../../services/auth-service.js';
+
+export class LoginForm {
+    private container: HTMLElement;
+    private isVisible: boolean;
+    private authService: AuthService;
+
+    constructor(containerId: string, authService: AuthService) {
+        this.container = document.getElementById(containerId)!;
         this.isVisible = false;
+        this.authService = authService;
 
         this.init();
     }
 
-    init() {
+    private init(): void {
         this.render();
         this.bindEvents();
     }
 
-    render() {
-        // Добавляем форму логина в контейнер, не перезаписывая его
+    private render(): void {
         const loginHTML = `
         <div class="auth-overlay login-overlay" style="display: none;">
             <div class="auth-modal">
@@ -64,13 +67,11 @@ class LoginForm {
         </div>
     `;
 
-        // Добавляем HTML в контейнер
         this.container.insertAdjacentHTML('beforeend', loginHTML);
     }
 
-    bindEvents() {
+    private bindEvents(): void {
         const closeBtn = this.container.querySelector('.close-btn');
-        const overlay = this.container.querySelector('.auth-overlay');
         const form = this.container.querySelector('#login-form');
         const switchLink = this.container.querySelector('.switch-to-register');
 
@@ -79,14 +80,6 @@ class LoginForm {
                 this.hide();
             });
         }
-
-        // if (overlay) {
-        //     overlay.addEventListener('click', (e) => {
-        //         if (e.target === e.currentTarget) {
-        //             this.hide();
-        //         }
-        //     });
-        // }
 
         if (form) {
             form.addEventListener('submit', (e) => {
@@ -110,86 +103,80 @@ class LoginForm {
         });
     }
 
-    async handleLogin() {
-        const form = this.container.querySelector('#login-form');
-        const submitBtn = form.querySelector('button[type="submit"]');
-        const btnText = submitBtn.querySelector('.btn-text');
-        const btnLoading = submitBtn.querySelector('.btn-loading');
-        const errorDiv = this.container.querySelector('#login-error');
+    private async handleLogin(): Promise<void> {
+        const form = this.container.querySelector('#login-form') as HTMLFormElement;
+        const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+        const btnText = submitBtn.querySelector('.btn-text') as HTMLElement;
+        const btnLoading = submitBtn.querySelector('.btn-loading') as HTMLElement;
+        const errorDiv = this.container.querySelector('#login-error') as HTMLElement;
 
-        const username = form.querySelector('#login-username').value;
-        const password = form.querySelector('#login-password').value;
+        const username = (form.querySelector('#login-username') as HTMLInputElement).value;
+        const password = (form.querySelector('#login-password') as HTMLInputElement).value;
 
-        // Валидация
         if (!username || !password) {
             this.showError('Заполните все поля');
             return;
         }
 
-        // Показываем индикатор загрузки
         btnText.style.display = 'none';
         btnLoading.style.display = 'inline';
         submitBtn.disabled = true;
         errorDiv.style.display = 'none';
 
         try {
-            const result = await authManager.login(username, password);
+            const result = await this.authService.login(username, password);
 
             if (result.success) {
                 this.hide();
-                this.showSuccess(`Добро пожаловать, ${result.user.username}!`);
+                this.showSuccess(`Добро пожаловать, ${result.user!.username}!`);
             } else {
                 this.showError(result.error || 'Ошибка входа');
             }
         } catch (error) {
             this.showError('Ошибка сети. Проверьте подключение.');
         } finally {
-            // Восстанавливаем кнопку
             btnText.style.display = 'inline';
             btnLoading.style.display = 'none';
             submitBtn.disabled = false;
         }
     }
 
-    show() {
-        const overlay = this.container.querySelector('.login-overlay');
+    public show(): void {
+        const overlay = this.container.querySelector('.login-overlay') as HTMLElement;
         if (overlay) {
             overlay.style.display = 'flex';
             this.isVisible = true;
 
             setTimeout(() => {
-                const usernameInput = this.container.querySelector('#login-username');
+                const usernameInput = this.container.querySelector('#login-username') as HTMLInputElement;
                 if (usernameInput) usernameInput.focus();
             }, 100);
         }
     }
 
-    hide() {
-        const overlay = this.container.querySelector('.login-overlay');
+    public hide(): void {
+        const overlay = this.container.querySelector('.login-overlay') as HTMLElement;
         if (overlay) {
             overlay.style.display = 'none';
             this.isVisible = false;
         }
     }
 
-
-    showError(message) {
-        const errorDiv = this.container.querySelector('#login-error');
+    private showError(message: string): void {
+        const errorDiv = this.container.querySelector('#login-error') as HTMLElement;
         errorDiv.textContent = message;
         errorDiv.style.display = 'block';
 
-        // Автоскрытие через 5 секунд
         setTimeout(() => {
             errorDiv.style.display = 'none';
         }, 5000);
     }
 
-    showSuccess(message) {
-        // Можно показать toast уведомление
+    private showSuccess(message: string): void {
         if (window.showNotification) {
             window.showNotification(message, 'success');
         } else {
-            alert(message); // Fallback
+            alert(message);
         }
     }
 }

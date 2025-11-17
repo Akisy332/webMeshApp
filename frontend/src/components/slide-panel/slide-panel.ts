@@ -1,25 +1,42 @@
-class SlidePanel {
+import { FixedScrollbarVirtualizedTable } from '../telemetry-data-table/table.js';
+
+export class SlidePanel {
+    private panel: HTMLElement;
+    private toggleBtn: HTMLElement;
+    private isOpen: boolean = false;
+    private isTableLoading: boolean = false;
+    private isTableLoaded: boolean = false;
+    private virtualTable: FixedScrollbarVirtualizedTable | null = null;
+    private tableContent: HTMLElement;
+
     constructor() {
-        this.panel = document.getElementById('slidePanel');
-        this.toggleBtn = document.getElementById('togglePanel');
-        this.isOpen = false;
-        this.isTableLoading = false;
-        this.isTableLoaded = false;
-        this.virtualTable = null;
-        this.tableControls = null;
+        this.panel = document.getElementById('slidePanel')!;
+        this.toggleBtn = document.getElementById('togglePanel')!;
+        this.tableContent = document.getElementById('table-content')!;
+
         this.init();
     }
 
-    init() {
-        this.toggleBtn.addEventListener('click', () => this.toggle());
+    private init(): void {
+        console.log('SlidePanel initializing...');
+        
+        this.bindEvents();
+        
+        console.log('SlidePanel initialized');
+    }
+
+    private bindEvents(): void {
+        this.toggleBtn.addEventListener('click', () => {
+            this.toggle();
+        });
 
         // Закрытие по ESC
-        document.addEventListener('keydown', (e) => {
+        document.addEventListener('keydown', (e: KeyboardEvent) => {
             if (e.key === 'Escape') this.close();
         });
     }
 
-    toggle() {
+    public toggle(): void {
         if (this.isOpen) {
             this.close();
         } else {
@@ -27,10 +44,11 @@ class SlidePanel {
         }
     }
 
-    open() {
+    public open(): void {
         this.isOpen = true;
         this.panel.classList.add('open');
         document.body.style.overflow = 'hidden';
+        
         if (!this.isTableLoading) {
             if (!this.isTableLoaded) {
                 this.loadTable();
@@ -43,35 +61,35 @@ class SlidePanel {
         }
     }
 
-    close() {
+    public close(): void {
         this.isOpen = false;
         this.panel.classList.remove('open');
         document.body.style.overflow = '';
     }
 
-    async loadTable() {
+    private async loadTable(): Promise<void> {
         this.isTableLoading = true;
-        console.log("load table");
-        const tableContent = document.getElementById('table-content');
-
+        console.log("Loading table...");
+        
         if (!this.isTableLoaded) {
-            tableContent.innerHTML = `
-                    <div class="text-center py-5">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Загрузка...</span>
-                        </div>
-                        <p class="mt-2">Загрузка таблицы...</p>
+            this.tableContent.innerHTML = `
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Загрузка...</span>
                     </div>
-                `;
+                    <p class="mt-2">Загрузка таблицы...</p>
+                </div>
+            `;
         }
 
         try {
             const response = await fetch('/table');
             if (response.ok) {
                 const html = await response.text();
-                tableContent.innerHTML = html;
+                this.tableContent.innerHTML = html;
                 this.isTableLoaded = true;
                 this.isTableLoading = false;
+                
                 // Инициализируем таблицу после загрузки DOM
                 setTimeout(() => {
                     this.initializeTableAndControls();
@@ -81,18 +99,18 @@ class SlidePanel {
             }
         } catch (error) {
             console.error('Error loading table:', error);
-            tableContent.innerHTML = `
-                    <div class="alert alert-danger">
-                        <h5>Ошибка загрузки таблицы</h5>
-                        <p>${error.message}</p>
-                        <button class="btn btn-primary" onclick="slidePanel.loadTable()">Попробовать снова</button>
-                    </div>
-                `;
+            this.tableContent.innerHTML = `
+                <div class="alert alert-danger">
+                    <h5>Ошибка загрузки таблицы</h5>
+                    <p>${(error as Error).message}</p>
+                    <button class="btn btn-primary" onclick="window.mainApp.getSlidePanel()?.loadTable()">Попробовать снова</button>
+                </div>
+            `;
         }
     }
 
-    initializeTableAndControls() {
-        const tableContainer = document.querySelector('#table-content #table-container');
+    private initializeTableAndControls(): void {
+        const tableContainer = document.querySelector('#table-content #table-container') as HTMLElement;
         if (!tableContainer) {
             console.error('Table container not found');
             return;
@@ -108,36 +126,40 @@ class SlidePanel {
             this.virtualTable.destroy();
         }
 
-        // Создаем новый экземпляр таблицы
-        this.virtualTable = new FixedScrollbarVirtualizedTable('table-container', {
-            apiUrl: '/api/table/users',
-            limit: 200,
-            rowHeight: 45,
-            buffer: 50,
-            cleanupThreshold: 500,
-            preloadThreshold: 100
-        });
+        // Создаем новый экземпляр таблицы через импорт
+        try {
+            this.virtualTable = new FixedScrollbarVirtualizedTable('table-container', {
+                apiUrl: '/api/table/users',
+                limit: 200,
+                rowHeight: 45,
+                buffer: 50,
+                cleanupThreshold: 500,
+                preloadThreshold: 100
+            });
 
-        // Сохраняем ссылку на элемент панели
-        this.virtualTable.panelElement = this.panel;
+            // Сохраняем ссылку на элемент панели
+            (this.virtualTable as any).panelElement = this.panel;
 
-        // Принудительно обновляем размеры
-        setTimeout(() => {
-            if (this.virtualTable) {
-                this.virtualTable.updateTableWidth();
-                this.virtualTable.updateScrollbarSize();
-                this.virtualTable.renderVisibleRows(true);
-                this.virtualTable.updatePanelWidth(); // Добавлен вызов обновления ширины панели
-            }
-        }, 200);
+            // Принудительно обновляем размеры
+            setTimeout(() => {
+                if (this.virtualTable) {
+                    this.virtualTable.updateTableWidth();
+                    this.virtualTable.updateScrollbarSize();
+                    this.virtualTable.renderVisibleRows(true);
+                    this.virtualTable.updatePanelWidth();
+                }
+            }, 200);
 
-        this.initializeTableControls();
+            this.initializeTableControls();
+        } catch (error) {
+            console.error('Error creating virtual table:', error);
+        }
     }
 
-    initializeTableControls() {
+    private initializeTableControls(): void {
         // Убедимся, что элементы управления существуют
-        const controlsPanel = document.querySelector('#table-content #controls-panel');
-        const tableWrapper = document.querySelector('#table-content #table-wrapper');
+        const controlsPanel = document.querySelector('#table-content #controls-panel') as HTMLElement;
+        const tableWrapper = document.querySelector('#table-content #table-wrapper') as HTMLElement;
 
         if (!controlsPanel || !tableWrapper) {
             console.error('Control elements not found in loaded table');
@@ -154,7 +176,7 @@ class SlidePanel {
         this.setupControlHandlers();
     }
 
-    createExternalToggleButton() {
+    private createExternalToggleButton(): void {
         // Удаляем старую кнопку если существует
         const oldButton = document.querySelector('#table-content #external-toggle-controls');
         if (oldButton) {
@@ -169,7 +191,7 @@ class SlidePanel {
         externalToggle.innerHTML = '<i class="fas fa-cog"></i>';
 
         // Вставляем в header-controls
-        const headerControls = document.querySelector('#table-content .header-controls');
+        const headerControls = document.querySelector('#table-content .header-controls') as HTMLElement;
         if (headerControls) {
             headerControls.appendChild(externalToggle);
 
@@ -178,11 +200,11 @@ class SlidePanel {
         }
     }
 
-    openControlsPanel() {
-        const controlsPanel = document.querySelector('#table-content #controls-panel');
-        const tableWrapper = document.querySelector('#table-content #table-wrapper');
-        const toggleBtn = document.querySelector('#table-content #toggle-controls');
-        const externalToggle = document.querySelector('#table-content #external-toggle-controls');
+    private openControlsPanel(): void {
+        const controlsPanel = document.querySelector('#table-content #controls-panel') as HTMLElement;
+        const tableWrapper = document.querySelector('#table-content #table-wrapper') as HTMLElement;
+        const toggleBtn = document.querySelector('#table-content #toggle-controls') as HTMLElement;
+        const externalToggle = document.querySelector('#table-content #external-toggle-controls') as HTMLElement;
 
         if (controlsPanel && tableWrapper) {
             controlsPanel.classList.add('open');
@@ -199,13 +221,14 @@ class SlidePanel {
         }
     }
 
-    setupTabHandlers() {
+    private setupTabHandlers(): void {
         const tabBtns = document.querySelectorAll('#table-content .tab-btn');
         const tabContents = document.querySelectorAll('#table-content .controls-content');
 
         tabBtns.forEach(btn => {
             btn.addEventListener('click', () => {
-                const tabName = btn.dataset.tab;
+                const tabName = (btn as HTMLElement).dataset.tab;
+                if (!tabName) return;
 
                 // Деактивируем все вкладки
                 tabBtns.forEach(b => b.classList.remove('active'));
@@ -213,7 +236,7 @@ class SlidePanel {
 
                 // Активируем выбранную вкладку
                 btn.classList.add('active');
-                const activeTabContent = document.querySelector(`#table-content #tab-${tabName}`);
+                const activeTabContent = document.querySelector(`#table-content #tab-${tabName}`) as HTMLElement;
                 if (activeTabContent) {
                     activeTabContent.classList.add('active');
                 }
@@ -221,10 +244,10 @@ class SlidePanel {
         });
     }
 
-    setupControlHandlers() {
+    private setupControlHandlers(): void {
         // Кнопка закрытия панели
-        const closeBtn = document.querySelector('#table-content #close-panel');
-        const toggleBtn = document.querySelector('#table-content #toggle-controls');
+        const closeBtn = document.querySelector('#table-content #close-panel') as HTMLElement;
+        const toggleBtn = document.querySelector('#table-content #toggle-controls') as HTMLElement;
 
         if (closeBtn) {
             closeBtn.addEventListener('click', () => this.closeControlsPanel());
@@ -235,14 +258,15 @@ class SlidePanel {
         }
 
         // Поиск
-        const searchButton = document.querySelector('#table-content #search-button');
-        const searchValue = document.querySelector('#table-content #search-value');
+        const searchButton = document.querySelector('#table-content #search-button') as HTMLButtonElement;
+        const searchValue = document.querySelector('#table-content #search-value') as HTMLInputElement;
 
         if (searchButton && this.virtualTable) {
             searchButton.addEventListener('click', async () => {
-                const field = document.querySelector('#table-content #search-field').value;
+                const fieldSelect = document.querySelector('#table-content #search-field') as HTMLSelectElement;
+                const field = fieldSelect?.value || '';
                 const value = searchValue.value.trim();
-                const statusElement = document.querySelector('#table-content #search-status');
+                const statusElement = document.querySelector('#table-content #search-status') as HTMLElement;
 
                 if (!value) {
                     if (statusElement) {
@@ -272,16 +296,16 @@ class SlidePanel {
         }
 
         if (searchValue && this.virtualTable) {
-            searchValue.addEventListener('keypress', (e) => {
+            searchValue.addEventListener('keypress', (e: KeyboardEvent) => {
                 if (e.key === 'Enter') {
-                    searchButton.click();
+                    searchButton?.click();
                 }
             });
         }
 
         // Навигация по ID
-        const goToIdButton = document.querySelector('#table-content #go-to-id-button');
-        const goToId = document.querySelector('#table-content #go-to-id');
+        const goToIdButton = document.querySelector('#table-content #go-to-id-button') as HTMLButtonElement;
+        const goToId = document.querySelector('#table-content #go-to-id') as HTMLInputElement;
 
         if (goToIdButton && this.virtualTable) {
             goToIdButton.addEventListener('click', () => {
@@ -297,7 +321,7 @@ class SlidePanel {
         }
 
         if (goToId && this.virtualTable) {
-            goToId.addEventListener('keypress', (e) => {
+            goToId.addEventListener('keypress', (e: KeyboardEvent) => {
                 if (e.key === 'Enter') {
                     goToIdButton.click();
                 }
@@ -305,8 +329,8 @@ class SlidePanel {
         }
 
         // Кнопки навигации
-        const scrollToTop = document.querySelector('#table-content #scroll-to-top');
-        const scrollToBottom = document.querySelector('#table-content #scroll-to-bottom');
+        const scrollToTop = document.querySelector('#table-content #scroll-to-top') as HTMLElement;
+        const scrollToBottom = document.querySelector('#table-content #scroll-to-bottom') as HTMLElement;
 
         if (scrollToTop && this.virtualTable) {
             scrollToTop.addEventListener('click', () => {
@@ -322,13 +346,15 @@ class SlidePanel {
 
         // Управление столбцами
         const columnToggles = document.querySelectorAll('#table-content .column-toggle');
-        const resetColumns = document.querySelector('#table-content #reset-columns');
+        const resetColumns = document.querySelector('#table-content #reset-columns') as HTMLElement;
 
         columnToggles.forEach(checkbox => {
             checkbox.addEventListener('change', () => {
-                const columnKey = checkbox.dataset.column;
-                const isVisible = checkbox.checked;
-                this.virtualTable.toggleColumn(columnKey, isVisible);
+                const columnKey = (checkbox as HTMLElement).dataset.column;
+                const isVisible = (checkbox as HTMLInputElement).checked;
+                if (columnKey) {
+                    this.virtualTable.toggleColumn(columnKey, isVisible);
+                }
             });
         });
 
@@ -339,11 +365,11 @@ class SlidePanel {
         }
     }
 
-    closeControlsPanel() {
-        const controlsPanel = document.querySelector('#table-content #controls-panel');
-        const tableWrapper = document.querySelector('#table-content #table-wrapper');
-        const toggleBtn = document.querySelector('#table-content #toggle-controls');
-        const externalToggle = document.querySelector('#table-content #external-toggle-controls');
+    private closeControlsPanel(): void {
+        const controlsPanel = document.querySelector('#table-content #controls-panel') as HTMLElement;
+        const tableWrapper = document.querySelector('#table-content #table-wrapper') as HTMLElement;
+        const toggleBtn = document.querySelector('#table-content #toggle-controls') as HTMLElement;
+        const externalToggle = document.querySelector('#table-content #external-toggle-controls') as HTMLElement;
 
         if (controlsPanel && tableWrapper) {
             controlsPanel.classList.remove('open');
@@ -358,30 +384,27 @@ class SlidePanel {
             }
         }
     }
-}
 
-// Загружаем скрипт таблицы перед инициализацией панели
-function loadTableScript() {
-    return new Promise((resolve, reject) => {
-        if (typeof FixedScrollbarVirtualizedTable !== 'undefined') {
-            resolve();
-            return;
+    public getIsOpen(): boolean {
+        return this.isOpen;
+    }
+
+    public getIsTableLoaded(): boolean {
+        return this.isTableLoaded;
+    }
+
+    public destroy(): void {
+        // Очистка событий
+        this.toggleBtn.removeEventListener('click', this.toggle);
+        document.removeEventListener('keydown', this.handleEscapeKey);
+        
+        // Уничтожаем виртуальную таблицу если она существует
+        if (this.virtualTable) {
+            this.virtualTable.destroy();
         }
+    }
 
-        const script = document.createElement('script');
-        script.src = '/static/components/telemetry_data_table/table.js';
-        script.onload = resolve;
-        script.onerror = reject;
-        document.head.appendChild(script);
-    });
+    private handleEscapeKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') this.close();
+    }
 }
-
-
-// Инициализация после загрузки скрипта
-loadTableScript()
-    .then(() => {
-        window.slidePanel = new SlidePanel();
-    })
-    .catch(error => {
-        console.error('Failed to load table script:', error);
-    });

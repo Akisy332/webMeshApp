@@ -1,63 +1,56 @@
-class AuthNavbar {
-    constructor(containerId) {
-        this.container = document.getElementById(containerId);
-        this.authState = 'loading'; // loading, authenticated, unauthenticated
+import { AuthService } from '../../services/auth-service.js';
+import type { User } from '../../types/index.js';
+
+export class AuthNavbar {
+    private container: HTMLElement;
+    private authState: 'loading' | 'authenticated' | 'unauthenticated';
+    private user: User | null;
+    private authService: AuthService;
+
+    constructor(containerId: string, authService: AuthService) {
+        this.container = document.getElementById(containerId)!;
+        this.authState = 'loading';
         this.user = null;
+        this.authService = authService;
 
         this.init();
     }
 
-    async init() {
-    this.render();
-    this.bindEvents();
+    private async init(): Promise<void> {
+        this.render();
+        this.bindEvents();
 
-    // Ждем инициализации authManager
-    if (!window.authManager) {
-        console.warn('AuthManager not found, waiting...');
-        setTimeout(() => this.init(), 100);
-        return;
+        // Ждем инициализации authService
+        await this.waitForAuthService();
+        
+        // Устанавливаем начальное состояние
+        this.authState = 'loading';
+        this.updateAuthState();
+
+        // Ждем завершения проверки аутентификации
+        await this.waitForAuthCheck();
+
+        // Слушаем события аутентификации
+        document.addEventListener('auth:login', (e) => {
+            const event = e as CustomEvent<{ user: User }>;
+            this.user = event.detail.user;
+            this.authState = 'authenticated';
+            this.updateAuthState();
+        });
+
+        document.addEventListener('auth:logout', () => {
+            this.user = null;
+            this.authState = 'unauthenticated';
+            this.updateAuthState();
+        });
+
+        console.log('AuthNavbar initialized');
     }
 
-    // Устанавливаем начальное состояние
-    this.authState = 'loading';
-    this.updateAuthState();
-
-    // Ждем завершения проверки аутентификации
-    await this.waitForAuthCheck();
-
-    // Слушаем события аутентификации
-    document.addEventListener('auth:login', (e) => {
-        this.user = e.detail.user;
-        this.authState = 'authenticated';
-        this.updateAuthState();
-    });
-
-    document.addEventListener('auth:logout', () => {
-        this.user = null;
-        this.authState = 'unauthenticated';
-        this.updateAuthState();
-    });
-
-    console.log('AuthNavbar initialized');
-}
-
-forceUpdateAuthState() {
-    if (window.authManager) {
-        this.user = authManager.getCurrentUser();
-        this.authState = authManager.isAuthenticated() ? 'authenticated' : 'unauthenticated';
-        this.updateAuthState();
-    }
-}
-
-    async waitForAuthCheck() {
-        // Ждем пока authManager проверит аутентификацию
+    private async waitForAuthService(): Promise<void> {
         return new Promise((resolve) => {
             const check = () => {
-                if (window.authManager && window.authManager.isInitialized) {
-                    this.user = authManager.getCurrentUser();
-                    // Сразу обновляем состояние после получения данных
-                    this.authState = authManager.isAuthenticated() ? 'authenticated' : 'unauthenticated';
-                    this.updateAuthState();
+                if (this.authService) {
                     resolve();
                 } else {
                     setTimeout(check, 50);
@@ -65,9 +58,16 @@ forceUpdateAuthState() {
             };
             check();
         });
-}
+    }
 
-    render() {
+    private async waitForAuthCheck(): Promise<void> {
+        const currentUser = this.authService.getCurrentUser();
+        this.user = currentUser;
+        this.authState = currentUser ? 'authenticated' : 'unauthenticated';
+        this.updateAuthState();
+    }
+
+    private render(): void {
         this.container.innerHTML = `
             <nav class="navbar">
                 <div class="nav-brand">
@@ -171,36 +171,56 @@ forceUpdateAuthState() {
         `;
     }
 
-    bindEvents() {
+    private bindEvents(): void {
         // Кнопки аутентификации
-        this.container.querySelector('.login-btn')?.addEventListener('click', () => {
-            this.showLoginModal();
-        });
+        const loginBtn = this.container.querySelector('.login-btn') as HTMLButtonElement;
+        const registerBtn = this.container.querySelector('.register-btn') as HTMLButtonElement;
 
-        this.container.querySelector('.register-btn')?.addEventListener('click', () => {
-            this.showRegisterModal();
-        });
+        if (loginBtn) {
+            loginBtn.addEventListener('click', () => {
+                this.showLoginModal();
+            });
+        }
+
+        if (registerBtn) {
+            registerBtn.addEventListener('click', () => {
+                this.showRegisterModal();
+            });
+        }
 
         // Меню пользователя
-        this.container.querySelector('.user-btn')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.toggleUserDropdown();
-        });
+        const userBtn = this.container.querySelector('.user-btn') as HTMLButtonElement;
+        const logoutBtn = this.container.querySelector('.logout-btn') as HTMLAnchorElement;
+        const profileBtn = this.container.querySelector('.profile-btn') as HTMLAnchorElement;
+        const adminBtn = this.container.querySelector('.admin-btn') as HTMLAnchorElement;
 
-        this.container.querySelector('.logout-btn')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            this.handleLogout();
-        });
+        if (userBtn) {
+            userBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleUserDropdown();
+            });
+        }
 
-        this.container.querySelector('.profile-btn')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            this.showProfile();
-        });
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.handleLogout();
+            });
+        }
 
-        this.container.querySelector('.admin-btn')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            this.navigateToAdmin();
-        });
+        if (profileBtn) {
+            profileBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.showProfile();
+            });
+        }
+
+        if (adminBtn) {
+            adminBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.navigateToAdmin();
+            });
+        }
 
         // Закрытие dropdown при клике вне
         document.addEventListener('click', () => {
@@ -208,54 +228,55 @@ forceUpdateAuthState() {
         });
 
         // Навигационные ссылки
-        this.container.querySelectorAll('.nav-link').forEach(link => {
+        const navLinks = this.container.querySelectorAll('.nav-link');
+        navLinks.forEach(link => {
             link.addEventListener('click', (e) => {
                 this.handleNavigation(e);
             });
         });
     }
 
-    updateAuthState() {
-    const unauthenticatedSection = this.container.querySelector('.unauthenticated');
-    const authenticatedSection = this.container.querySelector('.authenticated');
-    const loadingSection = this.container.querySelector('.loading');
+    private updateAuthState(): void {
+        const unauthenticatedSection = this.container.querySelector('.unauthenticated') as HTMLElement;
+        const authenticatedSection = this.container.querySelector('.authenticated') as HTMLElement;
+        const loadingSection = this.container.querySelector('.loading') as HTMLElement;
 
-    // Обновляем отображение секций
-    if (this.authState === 'loading') {
-        if (unauthenticatedSection) unauthenticatedSection.style.display = 'none';
-        if (authenticatedSection) authenticatedSection.style.display = 'none';
-        if (loadingSection) loadingSection.style.display = 'flex';
-        return;
+        // Обновляем отображение секций
+        if (this.authState === 'loading') {
+            if (unauthenticatedSection) unauthenticatedSection.style.display = 'none';
+            if (authenticatedSection) authenticatedSection.style.display = 'none';
+            if (loadingSection) loadingSection.style.display = 'flex';
+            return;
+        }
+
+        if (this.authService.isAuthenticated() && this.user) {
+            this.authState = 'authenticated';
+            if (unauthenticatedSection) unauthenticatedSection.style.display = 'none';
+            if (authenticatedSection) authenticatedSection.style.display = 'block';
+            if (loadingSection) loadingSection.style.display = 'none';
+
+            // Обновляем информацию пользователя
+            this.updateUserInfo();
+
+            // Показываем админские элементы если пользователь админ
+            this.toggleAdminElements();
+
+        } else {
+            this.authState = 'unauthenticated';
+            if (unauthenticatedSection) unauthenticatedSection.style.display = 'block';
+            if (authenticatedSection) authenticatedSection.style.display = 'none';
+            if (loadingSection) loadingSection.style.display = 'none';
+
+            // Скрываем админские элементы
+            this.toggleAdminElements();
+        }
     }
 
-    if (authManager.isAuthenticated() && this.user) {
-        this.authState = 'authenticated';
-        if (unauthenticatedSection) unauthenticatedSection.style.display = 'none';
-        if (authenticatedSection) authenticatedSection.style.display = 'block';
-        if (loadingSection) loadingSection.style.display = 'none';
-
-        // Обновляем информацию пользователя
-        this.updateUserInfo();
-
-        // Показываем админские элементы если пользователь админ
-        this.toggleAdminElements();
-
-    } else {
-        this.authState = 'unauthenticated';
-        if (unauthenticatedSection) unauthenticatedSection.style.display = 'block';
-        if (authenticatedSection) authenticatedSection.style.display = 'none';
-        if (loadingSection) loadingSection.style.display = 'none';
-
-        // Скрываем админские элементы
-        this.toggleAdminElements();
-    }
-}
-
-    updateUserInfo() {
+    private updateUserInfo(): void {
         if (!this.user) return;
 
-        const usernameElement = this.container.querySelector('.username');
-        const roleBadgeElement = this.container.querySelector('.user-role-badge');
+        const usernameElement = this.container.querySelector('.username') as HTMLElement;
+        const roleBadgeElement = this.container.querySelector('.user-role-badge') as HTMLElement;
 
         if (usernameElement) {
             usernameElement.textContent = this.user.username;
@@ -264,7 +285,7 @@ forceUpdateAuthState() {
         if (roleBadgeElement) {
             // Создаем badge в зависимости от роли
             const role = this.user.role || 'user';
-            const roleConfig = {
+            const roleConfig: Record<string, { text: string; color: string; bgColor: string }> = {
                 'developer': { text: 'DEVELOPER', color: '#6f42c1', bgColor: '#e9ecef' },
                 'admin': { text: 'ADMIN', color: '#dc3545', bgColor: '#f8d7da' },
                 'curator': { text: 'CURATOR', color: '#fd7e14', bgColor: '#fff3cd' },
@@ -287,14 +308,14 @@ forceUpdateAuthState() {
         }
     }
 
-    toggleAdminElements() {
-        const isAdmin = authManager.isAdmin();
+    private toggleAdminElements(): void {
+        const isAdmin = this.authService.isAdmin();
         const adminLinks = this.container.querySelectorAll('.admin-only');
-        const adminMenuItems = this.container.querySelector('.admin-menu-items');
+        const adminMenuItems = this.container.querySelector('.admin-menu-items') as HTMLElement;
 
         // Навигационные ссылки для админов
         adminLinks.forEach(link => {
-            link.style.display = isAdmin ? 'flex' : 'none';
+            (link as HTMLElement).style.display = isAdmin ? 'flex' : 'none';
         });
 
         // Пункты меню для админов
@@ -303,8 +324,8 @@ forceUpdateAuthState() {
         }
     }
 
-    toggleUserDropdown() {
-        const dropdown = this.container.querySelector('.dropdown-menu');
+    private toggleUserDropdown(): void {
+        const dropdown = this.container.querySelector('.dropdown-menu') as HTMLElement;
         const isVisible = dropdown.style.display === 'block';
 
         if (isVisible) {
@@ -314,8 +335,8 @@ forceUpdateAuthState() {
         }
     }
 
-    showUserDropdown() {
-        const dropdown = this.container.querySelector('.dropdown-menu');
+    private showUserDropdown(): void {
+        const dropdown = this.container.querySelector('.dropdown-menu') as HTMLElement;
         dropdown.style.display = 'block';
 
         // Добавляем анимацию
@@ -329,8 +350,8 @@ forceUpdateAuthState() {
         });
     }
 
-    hideUserDropdown() {
-        const dropdown = this.container.querySelector('.dropdown-menu');
+    private hideUserDropdown(): void {
+        const dropdown = this.container.querySelector('.dropdown-menu') as HTMLElement;
         if (dropdown.style.display === 'block') {
             dropdown.style.opacity = '0';
             dropdown.style.transform = 'translateY(-10px)';
@@ -341,11 +362,11 @@ forceUpdateAuthState() {
         }
     }
 
-    async handleLogout() {
+    private async handleLogout(): Promise<void> {
         if (confirm('Вы уверены, что хотите выйти?')) {
             try {
                 this.showLoadingState();
-                await authManager.logout();
+                await this.authService.logout();
                 this.hideUserDropdown();
                 this.showNotification('Вы успешно вышли из системы', 'success');
             } catch (error) {
@@ -357,56 +378,53 @@ forceUpdateAuthState() {
         }
     }
 
-    showLoadingState() {
-        const userBtn = this.container.querySelector('.user-btn');
+    private showLoadingState(): void {
+        const userBtn = this.container.querySelector('.user-btn') as HTMLButtonElement;
         if (userBtn) {
             userBtn.disabled = true;
             userBtn.style.opacity = '0.6';
         }
     }
 
-    hideLoadingState() {
-        const userBtn = this.container.querySelector('.user-btn');
+    private hideLoadingState(): void {
+        const userBtn = this.container.querySelector('.user-btn') as HTMLButtonElement;
         if (userBtn) {
             userBtn.disabled = false;
             userBtn.style.opacity = '1';
         }
     }
 
-    showLoginModal() {
-        // Используем существующую систему модальных окон
+    private showLoginModal(): void {
         document.dispatchEvent(new CustomEvent('auth:show-login'));
     }
 
-    showRegisterModal() {
+    private showRegisterModal(): void {
         document.dispatchEvent(new CustomEvent('auth:show-register'));
     }
 
-    showProfile() {
+    private showProfile(): void {
         this.hideUserDropdown();
-        // Можно открыть модальное окно профиля или перейти на страницу
         this.showNotification('Функция профиля в разработке', 'info');
     }
 
-    navigateToAdmin() {
+    private navigateToAdmin(): void {
         this.hideUserDropdown();
         window.location.href = '/admin';
     }
 
-    handleNavigation(event) {
-        // Можно добавить логику для активных ссылок
-        const link = event.currentTarget;
-        this.setActiveLink(link.dataset.page);
+    private handleNavigation(event: Event): void {
+        const link = event.currentTarget as HTMLElement;
+        this.setActiveLink(link.dataset.page || '');
     }
 
-    setActiveLink(activePage) {
-        this.container.querySelectorAll('.nav-link').forEach(link => {
-            link.classList.toggle('active', link.dataset.page === activePage);
+    private setActiveLink(activePage: string): void {
+        const navLinks = this.container.querySelectorAll('.nav-link');
+        navLinks.forEach(link => {
+            link.classList.toggle('active', (link as HTMLElement).dataset.page === activePage);
         });
     }
 
-    showNotification(message, type = 'info') {
-        // Используем существующую систему уведомлений
+    private showNotification(message: string, type: string = 'info'): void {
         if (window.showNotification) {
             window.showNotification(message, type);
         } else {
@@ -424,7 +442,7 @@ forceUpdateAuthState() {
                 transition: all 0.3s ease;
             `;
 
-            const bgColors = {
+            const bgColors: Record<string, string> = {
                 success: '#28a745',
                 error: '#dc3545',
                 info: '#17a2b8',
@@ -443,9 +461,10 @@ forceUpdateAuthState() {
             }, 3000);
         }
     }
-}
 
-// Инициализация при загрузке страницы
-document.addEventListener('DOMContentLoaded', () => {
-    window.authNavbar = new AuthNavbar('navbar-container');
-});
+    public forceUpdateAuthState(): void {
+        this.user = this.authService.getCurrentUser();
+        this.authState = this.authService.isAuthenticated() ? 'authenticated' : 'unauthenticated';
+        this.updateAuthState();
+    }
+}

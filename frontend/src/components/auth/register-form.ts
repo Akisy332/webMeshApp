@@ -1,20 +1,24 @@
-/**
- * Register Form Component
- */
-class RegisterForm {
-    constructor(containerId) {
-        this.container = document.getElementById(containerId);
+import { AuthService } from '../../services/auth-service.js';
+
+export class RegisterForm {
+    private container: HTMLElement;
+    private isVisible: boolean;
+    private authService: AuthService;
+
+    constructor(containerId: string, authService: AuthService) {
+        this.container = document.getElementById(containerId)!;
         this.isVisible = false;
+        this.authService = authService;
 
         this.init();
     }
 
-    init() {
+    private init(): void {
         this.render();
         this.bindEvents();
     }
 
-    render() {
+    private render(): void {
         const registerHTML = `
         <div class="auth-overlay register-overlay" style="display: none;">
             <div class="auth-modal">
@@ -93,28 +97,18 @@ class RegisterForm {
         this.container.insertAdjacentHTML('beforeend', registerHTML);
     }
 
-    bindEvents() {
-        // Проверяем все элементы перед добавлением обработчиков
+    private bindEvents(): void {
         const closeBtn = this.container.querySelector('.close-btn-register');
-        const overlay = this.container.querySelector('.register-overlay');
         const form = this.container.querySelector('#register-form');
         const switchLink = this.container.querySelector('.switch-to-login');
-        const passwordInput = this.container.querySelector('#register-password');
-        const confirmInput = this.container.querySelector('#register-password-confirm');
+        const passwordInput = this.container.querySelector('#register-password') as HTMLInputElement;
+        const confirmInput = this.container.querySelector('#register-password-confirm') as HTMLInputElement;
 
         if (closeBtn) {
             closeBtn.addEventListener('click', () => {
                 this.hide();
             });
         }
-
-        // if (overlay) {
-        //     overlay.addEventListener('click', (e) => {
-        //         if (e.target === e.currentTarget) {
-        //             this.hide();
-        //         }
-        //     });
-        // }
 
         if (form) {
             form.addEventListener('submit', (e) => {
@@ -150,38 +144,36 @@ class RegisterForm {
         });
     }
 
-    validatePassword() {
-        const password = this.container.querySelector('#register-password').value;
+    private validatePassword(): boolean {
+        const password = (this.container.querySelector('#register-password') as HTMLInputElement).value;
         const requirements = {
             length: password.length >= 8,
             digit: /\d/.test(password),
             uppercase: /[A-Z]/.test(password)
         };
 
-        // Можно добавить визуализацию требований к паролю
         return requirements.length && requirements.digit && requirements.uppercase;
     }
 
-    validatePasswordMatch() {
-        const password = this.container.querySelector('#register-password').value;
-        const confirm = this.container.querySelector('#register-password-confirm').value;
+    private validatePasswordMatch(): boolean {
+        const password = (this.container.querySelector('#register-password') as HTMLInputElement).value;
+        const confirm = (this.container.querySelector('#register-password-confirm') as HTMLInputElement).value;
 
         return password === confirm;
     }
 
-    async handleRegister() {
-        const form = this.container.querySelector('#register-form');
-        const submitBtn = form.querySelector('button[type="submit"]');
-        const btnText = submitBtn.querySelector('.btn-text');
-        const btnLoading = submitBtn.querySelector('.btn-loading');
-        const errorDiv = this.container.querySelector('#register-error');
+    private async handleRegister(): Promise<void> {
+        const form = this.container.querySelector('#register-form') as HTMLFormElement;
+        const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+        const btnText = submitBtn.querySelector('.btn-text') as HTMLElement;
+        const btnLoading = submitBtn.querySelector('.btn-loading') as HTMLElement;
+        const errorDiv = this.container.querySelector('#register-error') as HTMLElement;
 
-        const email = form.querySelector('#register-email').value;
-        const username = form.querySelector('#register-username').value;
-        const password = form.querySelector('#register-password').value;
-        const passwordConfirm = form.querySelector('#register-password-confirm').value;
+        const email = (form.querySelector('#register-email') as HTMLInputElement).value;
+        const username = (form.querySelector('#register-username') as HTMLInputElement).value;
+        const password = (form.querySelector('#register-password') as HTMLInputElement).value;
+        const passwordConfirm = (form.querySelector('#register-password-confirm') as HTMLInputElement).value;
 
-        // Валидация
         if (!email || !username || !password || !passwordConfirm) {
             this.showError('Заполните все поля');
             return;
@@ -197,14 +189,13 @@ class RegisterForm {
             return;
         }
 
-        // Показываем индикатор загрузки
         btnText.style.display = 'none';
         btnLoading.style.display = 'inline';
         submitBtn.disabled = true;
         errorDiv.style.display = 'none';
 
         try {
-            const result = await authManager.register(email, username, password);
+            const result = await this.authService.register(email, username, password);
 
             if (result.success) {
                 this.showSuccess('Регистрация успешна! Теперь вы можете войти.');
@@ -218,48 +209,53 @@ class RegisterForm {
         } catch (error) {
             this.showError('Ошибка сети. Проверьте подключение.');
         } finally {
-            // Восстанавливаем кнопку
             btnText.style.display = 'inline';
             btnLoading.style.display = 'none';
             submitBtn.disabled = false;
         }
     }
 
-    show() {
-        const overlay = this.container.querySelector('.register-overlay');
+    public show(): void {
+        const overlay = this.container.querySelector('.register-overlay') as HTMLElement;
         if (overlay) {
             overlay.style.display = 'flex';
             this.isVisible = true;
 
             setTimeout(() => {
-                const emailInput = this.container.querySelector('#register-email');
+                const emailInput = this.container.querySelector('#register-email') as HTMLInputElement;
                 if (emailInput) emailInput.focus();
             }, 100);
         }
     }
 
-    hide() {
-        const overlay = this.container.querySelector('.register-overlay');
+    public hide(): void {
+        const overlay = this.container.querySelector('.register-overlay') as HTMLElement;
         if (overlay) {
             overlay.style.display = 'none';
             this.isVisible = false;
         }
 
-        const form = this.container.querySelector('#register-form');
-        const errorDiv = this.container.querySelector('#register-error');
-        const successDiv = this.container.querySelector('#register-success');
+        const form = this.container.querySelector('#register-form') as HTMLFormElement;
+        const errorDiv = this.container.querySelector('#register-error') as HTMLElement;
+        const successDiv = this.container.querySelector('#register-success') as HTMLElement;
 
         if (form) form.reset();
         if (errorDiv) errorDiv.style.display = 'none';
         if (successDiv) successDiv.style.display = 'none';
     }
 
-    showSuccess(message) {
-        const successDiv = this.container.querySelector('#register-success');
+    private showSuccess(message: string): void {
+        const successDiv = this.container.querySelector('#register-success') as HTMLElement;
         successDiv.textContent = message;
         successDiv.style.display = 'block';
 
-        // Скрываем ошибку если была
-        this.container.querySelector('#register-error').style.display = 'none';
+        const errorDiv = this.container.querySelector('#register-error') as HTMLElement;
+        errorDiv.style.display = 'none';
+    }
+
+    private showError(message: string): void {
+        const errorDiv = this.container.querySelector('#register-error') as HTMLElement;
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
     }
 }

@@ -27,8 +27,3 @@ EventBus.prototype = {
         });
     }
 };
-
-// Создаем глобальный экземпляр
-if (!window.eventBus) {
-    window.eventBus = new EventBus();
-}

@@ -1,20 +1,33 @@
-class AuthManager {
+import { eventBus } from '../core/event-bus.js';
+import { EventTypes, API_ENDPOINTS } from '../core/constants.js';
+import type { User } from '../types/index.js';
+
+export interface AuthResponse {
+    success: boolean;
+    user?: User;
+    error?: string;
+}
+
+export class AuthService {
+    private user: User | null = null;
+    private isInitialized = false;
+
     constructor() {
-        this.user = null;
-        this.isInitialized = false;
         this.init();
     }
 
-    async init() {
-        // Проверяем аутентификацию при загрузке
+    private async init(): Promise<void> {
+        if (this.isInitialized) return;
+
+        console.log('AuthService initializing...');
         await this.checkAuth();
         this.isInitialized = true;
-        console.log('Auth Manager initialized (Cookies mode)');
+        console.log('AuthService initialized');
     }
 
-    async register(email, username, password) {
+    async register(email: string, username: string, password: string): Promise<AuthResponse> {
         try {
-            const response = await fetch('/api/users', {
+            const response = await fetch(API_ENDPOINTS.USERS, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -36,30 +49,9 @@ class AuthManager {
         }
     }
 
-    async checkAuth() {
+    async login(username: string, password: string): Promise<AuthResponse> {
         try {
-            const response = await this.apiRequest('/api/auth/current-user');
-
-            if (response.success) {
-                this.user = response.data;
-                this.onAuthStateChange(true);
-                return true;
-            } else {
-                this.user = null;
-                this.onAuthStateChange(false);
-                return false;
-            }
-        } catch (error) {
-            console.error('Auth check failed:', error);
-            this.user = null;
-            this.onAuthStateChange(false);
-            return false;
-        }
-    }
-
-    async login(username, password) {
-        try {
-            const response = await fetch('/api/auth/login', {
+            const response = await fetch(`${API_ENDPOINTS.AUTH}/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -83,9 +75,9 @@ class AuthManager {
         }
     }
 
-    async logout() {
+    async logout(): Promise<void> {
         try {
-            await this.apiRequest('/api/auth/logout', { method: 'POST' });
+            await this.apiRequest(`${API_ENDPOINTS.AUTH}/logout`, { method: 'POST' });
         } catch (error) {
             console.error('Logout error:', error);
         } finally {
@@ -94,8 +86,29 @@ class AuthManager {
         }
     }
 
-async apiRequest(url, options = {}) {
-        const config = {
+    async checkAuth(): Promise<boolean> {
+        try {
+            const response = await this.apiRequest(`${API_ENDPOINTS.AUTH}/current-user`);
+
+            if (response.success) {
+                this.user = response.data;
+                this.onAuthStateChange(true);
+                return true;
+            } else {
+                this.user = null;
+                this.onAuthStateChange(false);
+                return false;
+            }
+        } catch (error) {
+            console.error('Auth check failed:', error);
+            this.user = null;
+            this.onAuthStateChange(false);
+            return false;
+        }
+    }
+
+    async apiRequest(url: string, options: RequestInit = {}): Promise<any> {
+        const config: RequestInit = {
             credentials: 'include',
             headers: {
                 'Content-Type': 'application/json',
@@ -107,18 +120,15 @@ async apiRequest(url, options = {}) {
         try {
             const response = await fetch(url, config);
 
-            // Если 401 - пользователь не авторизован, это нормально
             if (response.status === 401) {
                 console.log('User not authenticated');
                 throw new Error('Authentication required');
             }
 
-            // Для других ошибок пробуем refresh
             if (response.status === 403) {
                 console.log('Access token expired, attempting refresh...');
                 try {
                     await this.refreshTokens();
-                    // Повторяем оригинальный запрос
                     const retryResponse = await fetch(url, config);
                     return await this.handleResponse(retryResponse);
                 } catch (refreshError) {
@@ -134,9 +144,9 @@ async apiRequest(url, options = {}) {
         }
     }
 
-    async refreshTokens() {
+    async refreshTokens(): Promise<boolean> {
         try {
-            const response = await fetch('/api/auth/refresh', {
+            const response = await fetch(`${API_ENDPOINTS.AUTH}/refresh`, {
                 method: 'POST',
                 credentials: 'include'
             });
@@ -153,7 +163,7 @@ async apiRequest(url, options = {}) {
         }
     }
 
-    async handleResponse(response) {
+    private async handleResponse(response: Response): Promise<any> {
         const contentType = response.headers.get('content-type');
 
         if (contentType?.includes('application/json')) {
@@ -169,11 +179,59 @@ async apiRequest(url, options = {}) {
             { success: false, error: `HTTP ${response.status}` };
     }
 
-    // Проверка прав и ролей
-    hasRole(requiredRole) {
+    private onAuthStateChange(authenticated: boolean): void {
+        if (authenticated) {
+            console.log('User authenticated:', this.user?.username);
+            document.dispatchEvent(new CustomEvent('auth:login', {
+                detail: { user: this.user }
+            }));
+
+            if (this.isAdmin()) {
+                this.loadAdminFeatures();
+            }
+
+            this.updateUIForAuth();
+        } else {
+            console.log('User logged out');
+            document.dispatchEvent(new CustomEvent('auth:logout'));
+            this.updateUIForUnauth();
+        }
+    }
+
+    private updateUIForAuth(): void {
+        document.querySelectorAll('[data-auth-only]').forEach(el => {
+            (el as HTMLElement).style.display = 'block';
+        });
+
+        if (this.isAdmin()) {
+            document.querySelectorAll('[data-admin-only]').forEach(el => {
+                (el as HTMLElement).style.display = 'block';
+            });
+        }
+
+        const userElements = document.querySelectorAll('[data-user-info]');
+        userElements.forEach(el => {
+            const field = (el as HTMLElement).dataset.userInfo;
+            if (field === 'username' && this.user) {
+                el.textContent = this.user.username;
+            }
+        });
+    }
+
+    private updateUIForUnauth(): void {
+        document.querySelectorAll('[data-auth-only]').forEach(el => {
+            (el as HTMLElement).style.display = 'none';
+        });
+
+        document.querySelectorAll('[data-admin-only]').forEach(el => {
+            (el as HTMLElement).style.display = 'none';
+        });
+    }
+
+    hasRole(requiredRole: string): boolean {
         if (!this.user) return false;
 
-        const roleHierarchy = {
+        const roleHierarchy: Record<string, number> = {
             'developer': 4,
             'admin': 3,
             'curator': 2,
@@ -187,14 +245,14 @@ async apiRequest(url, options = {}) {
         return userLevel >= requiredLevel;
     }
 
-    isAdmin() {
+    isAdmin(): boolean {
         return this.hasRole('admin');
     }
 
-    can(permission) {
+    can(permission: string): boolean {
         if (!this.user) return false;
 
-        const permissions = {
+        const permissions: Record<string, string[]> = {
             'manage_users': ['admin', 'developer'],
             'view_analytics': ['admin', 'developer', 'curator'],
             'edit_content': ['admin', 'developer', 'curator'],
@@ -205,89 +263,28 @@ async apiRequest(url, options = {}) {
         return allowedRoles.includes(this.user.role);
     }
 
-    // События и обновление UI
-    onAuthStateChange(authenticated) {
-        if (authenticated) {
-            console.log('User authenticated:', this.user?.username);
-            document.dispatchEvent(new CustomEvent('auth:login', {
-                detail: { user: this.user }
-            }));
-
-            // Загружаем админ-функции если нужно
-            if (this.isAdmin()) {
-                this.loadAdminFeatures();
-            }
-
-            // Обновляем UI
-            this.updateUIForAuth();
-        } else {
-            console.log('🚪 User logged out');
-            document.dispatchEvent(new CustomEvent('auth:logout'));
-            this.updateUIForUnauth();
-        }
-    }
-
-    updateUIForAuth() {
-        // Показываем элементы для авторизованных пользователей
-        document.querySelectorAll('[data-auth-only]').forEach(el => {
-            el.style.display = 'block';
-        });
-
-        // Показываем админ-элементы если пользователь админ
-        if (this.isAdmin()) {
-            document.querySelectorAll('[data-admin-only]').forEach(el => {
-                el.style.display = 'block';
-            });
-        }
-
-        // Обновляем информацию о пользователе
-        const userElements = document.querySelectorAll('[data-user-info]');
-        userElements.forEach(el => {
-            const field = el.dataset.userInfo;
-            if (field === 'username' && this.user) {
-                el.textContent = this.user.username;
-            }
-        });
-    }
-
-    updateUIForUnauth() {
-        // Скрываем элементы для авторизованных пользователей
-        document.querySelectorAll('[data-auth-only]').forEach(el => {
-            el.style.display = 'none';
-        });
-
-        document.querySelectorAll('[data-admin-only]').forEach(el => {
-            el.style.display = 'none';
-        });
-    }
-
-    async loadAdminFeatures() {
+    private async loadAdminFeatures(): Promise<void> {
         if (this.isAdmin()) {
             try {
                 // Динамически загружаем админ-модули
-                await import('/static/js/admin/admin-panel.js');
-                await import('/static/js/admin/user-management.js');
-                console.log('🔧 Admin features loaded');
+                // await import('/static/js/admin/admin-panel.js');
+                // await import('/static/js/admin/user-management.js');
+                console.log('Admin features loaded');
             } catch (error) {
                 console.warn('Admin features not available:', error);
             }
         }
     }
 
-    // Публичные методы
-    getCurrentUser() {
+    getCurrentUser(): User | null {
         return this.user;
     }
 
-    // Добавьте метод для принудительной проверки аутентификации
-    async forceAuthCheck() {
+    async forceAuthCheck(): Promise<void> {
         await this.checkAuth();
     }
 
-    isAuthenticated() {
+    isAuthenticated(): boolean {
         return !!this.user;
     }
 }
-
-// Глобальный экземпляр
-window.authManager = new AuthManager();
