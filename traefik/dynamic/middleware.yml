@@ -16,7 +16,6 @@ http:
     cors:
       headers:
         accesscontrolallowmethods: "*"
-        accessControlAllowOrigin: "*"
         accesscontrolalloworiginlist: "*"
         accesscontrolmaxage: 100
         addvaryheader: true

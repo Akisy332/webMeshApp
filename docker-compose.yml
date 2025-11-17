@@ -176,13 +176,6 @@ services:
       - REDIS_URL=redis://redis-service:6379/0
     networks:
       - webmesh-network
-    volumes:
-      # Монтируем исходный код frontend
-      - ./frontend:/app
-      # Монтируем общие модули
-      - ./shared:/app/shared
-      # Для Python - монтируем pip кэш для ускорения
-      - python-packages:/root/.cache/pip
     labels:
       - "traefik.enable=true"
     
@@ -195,9 +188,6 @@ services:
       # Специальные настройки для WebSocket
       - "traefik.http.services.frontend.loadbalancer.server.scheme=http"
       - "traefik.http.services.frontend.loadbalancer.passHostHeader=true"
-
-volumes:
-  python-packages:
 
 networks:
   webmesh-network:
