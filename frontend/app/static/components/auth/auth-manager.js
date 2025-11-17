@@ -1,112 +1,34 @@
-/**
- * Auth Manager - управление аутентификацией на клиенте
- */
 class AuthManager {
     constructor() {
-        this.accessToken = null;
-        this.refreshToken = null;
         this.user = null;
-        this.tokenRefreshInterval = null;
-        this.isRefreshing = false;
-        this.refreshPromise = null;
-
+        this.isInitialized = false;
         this.init();
     }
 
-    init() {
-        // Загружаем токены из localStorage
-        this.loadTokens();
-
-        // Настраиваем интервал для автоматического обновления токенов
-        this.setupTokenRefresh();
-
-        // Добавляем интерцептор для запросов
-        this.setupRequestInterceptor();
-
-        console.log('🔐 Auth Manager initialized');
-    }
-
-    loadTokens() {
-        this.accessToken = localStorage.getItem('access_token');
-        this.refreshToken = localStorage.getItem('refresh_token');
-        const userData = localStorage.getItem('user_data');
-
-        if (userData) {
-            try {
-                this.user = JSON.parse(userData);
-            } catch (e) {
-                console.error('Error parsing user data:', e);
-                this.clearAuth();
-            }
-        }
-    }
-
-    saveTokens(accessToken, refreshToken, user) {
-        this.accessToken = accessToken;
-        this.refreshToken = refreshToken;
-        this.user = user;
-
-        localStorage.setItem('access_token', accessToken);
-        localStorage.setItem('refresh_token', refreshToken);
-        localStorage.setItem('user_data', JSON.stringify(user));
-    }
-
-    clearAuth() {
-        this.accessToken = null;
-        this.refreshToken = null;
-        this.user = null;
-
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user_data');
-
-        if (this.tokenRefreshInterval) {
-            clearInterval(this.tokenRefreshInterval);
-        }
-
-        // Уведомляем о выходе
-        this.onLogout();
-    }
-
-    async login(username, password) {
-        try {
-            const response = await this.apiRequest('/api/auth/login', 'POST', {
-                username,
-                password
-            });
-
-            if (response.success) {
-                this.saveTokens(
-                    response.data.access_token,
-                    response.data.refresh_token,
-                    response.data.user
-                );
-
-                this.setupTokenRefresh();
-                this.onLogin(response.data.user);
-
-                return { success: true, user: response.data.user };
-            } else {
-                return { success: false, error: response.error };
-            }
-        } catch (error) {
-            console.error('Login error:', error);
-            return { success: false, error: 'Network error' };
-        }
+    async init() {
+        // Проверяем аутентификацию при загрузке
+        await this.checkAuth();
+        this.isInitialized = true;
+        console.log('Auth Manager initialized (Cookies mode)');
     }
 
     async register(email, username, password) {
         try {
-            const response = await this.apiRequest('/api/users', 'POST', {
-                email,
-                username,
-                password
+            const response = await fetch('/api/users', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({ email, username, password })
             });
 
-            if (response.success) {
-                return { success: true, user: response.data };
+            if (response.ok) {
+                const data = await response.json();
+                return { success: true, user: data.user };
             } else {
-                return { success: false, error: response.error };
+                const errorData = await response.json();
+                return { success: false, error: errorData.detail || 'Registration failed' };
             }
         } catch (error) {
             console.error('Registration error:', error);
@@ -114,106 +36,93 @@ class AuthManager {
         }
     }
 
-    async refreshTokens() {
-        if (this.isRefreshing) {
-            return this.refreshPromise;
-        }
+    async checkAuth() {
+        try {
+            const response = await this.apiRequest('/api/auth/current-user');
 
-        this.isRefreshing = true;
-
-        this.refreshPromise = new Promise(async (resolve, reject) => {
-            try {
-                if (!this.refreshToken) {
-                    throw new Error('No refresh token available');
-                }
-
-                const response = await fetch('/api/auth/refresh', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        refresh_token: this.refreshToken
-                    })
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-
-                    this.saveTokens(
-                        data.access_token,
-                        data.refresh_token,
-                        data.user
-                    );
-
-                    console.log('🔄 Tokens refreshed successfully');
-                    resolve(true);
-                } else {
-                    throw new Error('Token refresh failed');
-                }
-            } catch (error) {
-                console.error('Token refresh error:', error);
-                this.clearAuth();
-                reject(error);
-            } finally {
-                this.isRefreshing = false;
-                this.refreshPromise = null;
+            if (response.success) {
+                this.user = response.data;
+                this.onAuthStateChange(true);
+                return true;
+            } else {
+                this.user = null;
+                this.onAuthStateChange(false);
+                return false;
             }
-        });
+        } catch (error) {
+            console.error('Auth check failed:', error);
+            this.user = null;
+            this.onAuthStateChange(false);
+            return false;
+        }
+    }
 
-        return this.refreshPromise;
+    async login(username, password) {
+        try {
+            const response = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({ username, password })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                this.user = data.user;
+                this.onAuthStateChange(true);
+                return { success: true, user: data.user };
+            } else {
+                const errorData = await response.json();
+                return { success: false, error: errorData.detail || 'Login failed' };
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            return { success: false, error: 'Network error' };
+        }
     }
 
     async logout() {
         try {
-            if (this.refreshToken) {
-                await this.apiRequest('/api/auth/logout', 'POST', {
-                    refresh_token: this.refreshToken
-                });
-            }
+            await this.apiRequest('/api/auth/logout', { method: 'POST' });
         } catch (error) {
             console.error('Logout error:', error);
         } finally {
-            this.clearAuth();
+            this.user = null;
+            this.onAuthStateChange(false);
         }
     }
 
-    async apiRequest(url, method = 'GET', data = null) {
+async apiRequest(url, options = {}) {
         const config = {
-            method,
+            credentials: 'include',
             headers: {
                 'Content-Type': 'application/json',
-            }
+                ...options.headers
+            },
+            ...options
         };
-
-        // Добавляем access token если есть
-        if (this.accessToken) {
-            config.headers['Authorization'] = `Bearer ${this.accessToken}`;
-        }
-
-        if (data && (method === 'POST' || method === 'PUT')) {
-            config.body = JSON.stringify(data);
-        }
 
         try {
             const response = await fetch(url, config);
 
-            // Если 401 - пробуем обновить токен и повторить запрос
-            if (response.status === 401 && this.refreshToken) {
-                console.log('🔄 Token expired, attempting refresh...');
+            // Если 401 - пользователь не авторизован, это нормально
+            if (response.status === 401) {
+                console.log('User not authenticated');
+                throw new Error('Authentication required');
+            }
 
+            // Для других ошибок пробуем refresh
+            if (response.status === 403) {
+                console.log('Access token expired, attempting refresh...');
                 try {
                     await this.refreshTokens();
-
-                    // Повторяем запрос с новым токеном
-                    if (this.accessToken) {
-                        config.headers['Authorization'] = `Bearer ${this.accessToken}`;
-                    }
-
+                    // Повторяем оригинальный запрос
                     const retryResponse = await fetch(url, config);
                     return await this.handleResponse(retryResponse);
                 } catch (refreshError) {
-                    this.clearAuth();
+                    this.onAuthStateChange(false);
                     throw new Error('Authentication required');
                 }
             }
@@ -225,125 +134,160 @@ class AuthManager {
         }
     }
 
+    async refreshTokens() {
+        try {
+            const response = await fetch('/api/auth/refresh', {
+                method: 'POST',
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                throw new Error('Token refresh failed');
+            }
+
+            console.log('Tokens refreshed successfully');
+            return true;
+        } catch (error) {
+            console.error('Token refresh error:', error);
+            throw error;
+        }
+    }
+
     async handleResponse(response) {
         const contentType = response.headers.get('content-type');
 
-        if (contentType && contentType.includes('application/json')) {
+        if (contentType?.includes('application/json')) {
             const data = await response.json();
-
-            if (response.ok) {
-                return { success: true, data };
-            } else {
-                return {
-                    success: false,
-                    error: data.error || data.detail || 'Request failed',
-                    status: response.status
-                };
-            }
-        } else {
-            if (response.ok) {
-                return { success: true, data: await response.text() };
-            } else {
-                return {
-                    success: false,
-                    error: `HTTP ${response.status}`,
-                    status: response.status
-                };
-            }
-        }
-    }
-
-    setupTokenRefresh() {
-        // Очищаем предыдущий интервал
-        if (this.tokenRefreshInterval) {
-            clearInterval(this.tokenRefreshInterval);
+            return response.ok ?
+                { success: true, data } :
+                { success: false, error: data.detail || data.error || 'Request failed' };
         }
 
-        // Обновляем токен каждые 10 минут (access token живет 15 минут)
-        if (this.accessToken) {
-            this.tokenRefreshInterval = setInterval(async () => {
-                if (this.refreshToken && !this.isRefreshing) {
-                    try {
-                        await this.refreshTokens();
-                    } catch (error) {
-                        console.error('Auto token refresh failed:', error);
-                    }
-                }
-            }, 10 * 60 * 1000); // 10 минут
-        }
+        const text = await response.text();
+        return response.ok ?
+            { success: true, data: text } :
+            { success: false, error: `HTTP ${response.status}` };
     }
 
-    setupRequestInterceptor() {
-        // Перехватчик для всех fetch запросов
-        const originalFetch = window.fetch;
-
-        window.fetch = async (url, options = {}) => {
-            // Добавляем токен к запросам к нашему API
-            if (typeof url === 'string' &&
-                (url.startsWith('/api/')) &&
-                this.accessToken) {
-
-                options.headers = {
-                    ...options.headers,
-                    'Authorization': `Bearer ${this.accessToken}`
-                };
-            }
-
-            return originalFetch(url, options);
-        };
-    }
-
-    isAuthenticated() {
-        return !!this.accessToken && !!this.user;
-    }
-
-    getUser() {
-        return this.user;
-    }
-
-    getAccessToken() {
-        return this.accessToken;
-    }
-
-    // События для UI
-    onLogin(user) {
-        console.log('✅ User logged in:', user.username);
-        // Можно добавить кастомные события или колбэки
-        document.dispatchEvent(new CustomEvent('auth:login', {
-            detail: { user }
-        }));
-    }
-
-    onLogout() {
-        console.log('🚪 User logged out');
-        document.dispatchEvent(new CustomEvent('auth:logout'));
-    }
-
-    // Проверка ролей и прав
-    hasRole(role) {
+    // Проверка прав и ролей
+    hasRole(requiredRole) {
         if (!this.user) return false;
 
-        // Простая проверка - можно расширить для разных ролей
-        if (role === 'admin' || role === 'superuser') {
-            return this.user.is_superuser === true;
-        }
+        const roleHierarchy = {
+            'developer': 4,
+            'admin': 3,
+            'curator': 2,
+            'user': 1,
+            'public': 0
+        };
 
-        return true; // Для обычных пользователей
+        const userLevel = roleHierarchy[this.user.role] || 0;
+        const requiredLevel = roleHierarchy[requiredRole] || 0;
+
+        return userLevel >= requiredLevel;
+    }
+
+    isAdmin() {
+        return this.hasRole('admin');
     }
 
     can(permission) {
-        // Можно расширить для проверки конкретных прав
         if (!this.user) return false;
 
-        // Пока просто проверяем суперпользователя
-        if (permission === 'manage_users' || permission === 'admin') {
-            return this.user.is_superuser === true;
+        const permissions = {
+            'manage_users': ['admin', 'developer'],
+            'view_analytics': ['admin', 'developer', 'curator'],
+            'edit_content': ['admin', 'developer', 'curator'],
+            'basic_access': ['user', 'admin', 'developer', 'curator']
+        };
+
+        const allowedRoles = permissions[permission] || [];
+        return allowedRoles.includes(this.user.role);
+    }
+
+    // События и обновление UI
+    onAuthStateChange(authenticated) {
+        if (authenticated) {
+            console.log('User authenticated:', this.user?.username);
+            document.dispatchEvent(new CustomEvent('auth:login', {
+                detail: { user: this.user }
+            }));
+
+            // Загружаем админ-функции если нужно
+            if (this.isAdmin()) {
+                this.loadAdminFeatures();
+            }
+
+            // Обновляем UI
+            this.updateUIForAuth();
+        } else {
+            console.log('🚪 User logged out');
+            document.dispatchEvent(new CustomEvent('auth:logout'));
+            this.updateUIForUnauth();
+        }
+    }
+
+    updateUIForAuth() {
+        // Показываем элементы для авторизованных пользователей
+        document.querySelectorAll('[data-auth-only]').forEach(el => {
+            el.style.display = 'block';
+        });
+
+        // Показываем админ-элементы если пользователь админ
+        if (this.isAdmin()) {
+            document.querySelectorAll('[data-admin-only]').forEach(el => {
+                el.style.display = 'block';
+            });
         }
 
-        return true; // Базовые права для всех аутентифицированных
+        // Обновляем информацию о пользователе
+        const userElements = document.querySelectorAll('[data-user-info]');
+        userElements.forEach(el => {
+            const field = el.dataset.userInfo;
+            if (field === 'username' && this.user) {
+                el.textContent = this.user.username;
+            }
+        });
+    }
+
+    updateUIForUnauth() {
+        // Скрываем элементы для авторизованных пользователей
+        document.querySelectorAll('[data-auth-only]').forEach(el => {
+            el.style.display = 'none';
+        });
+
+        document.querySelectorAll('[data-admin-only]').forEach(el => {
+            el.style.display = 'none';
+        });
+    }
+
+    async loadAdminFeatures() {
+        if (this.isAdmin()) {
+            try {
+                // Динамически загружаем админ-модули
+                await import('/static/js/admin/admin-panel.js');
+                await import('/static/js/admin/user-management.js');
+                console.log('🔧 Admin features loaded');
+            } catch (error) {
+                console.warn('Admin features not available:', error);
+            }
+        }
+    }
+
+    // Публичные методы
+    getCurrentUser() {
+        return this.user;
+    }
+
+    // Добавьте метод для принудительной проверки аутентификации
+    async forceAuthCheck() {
+        await this.checkAuth();
+    }
+
+    isAuthenticated() {
+        return !!this.user;
     }
 }
 
-// Создаем глобальный экземпляр
+// Глобальный экземпляр
 window.authManager = new AuthManager();
-
