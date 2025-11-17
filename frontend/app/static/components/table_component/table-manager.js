@@ -53,7 +53,7 @@ class TableManager {
                 this.tableData[message.id_module] = {
                     datetime: message.datetime_unix,
                     gps_ok: message.gps_ok,
-                    alt: message.alt,
+                    alt: message.coords ? message.coords.alt : "None",
                     module_name: message.module_name,
                     module_color: message.module_color
                 };
@@ -129,7 +129,7 @@ class TableManager {
 
         // Высота
         const altCell = document.createElement('td');
-        altCell.textContent = `${Math.round(message.coords.alt)} м`;
+        altCell.textContent = `${Math.round(message.coords ? message.coords.alt : "None")} м`;
         row.appendChild(altCell);
 
         // Время
@@ -215,7 +215,7 @@ class TableManager {
         this.tableData[message.id_module] = {
             datetime: message.datetime_unix,
             gps_ok: message.gps_ok,
-            alt: message.coords.alt,
+            alt: message.coords ? message.coords.alt : "None",
             module_name: message.module_name,
             module_color: message.module_color
         };
@@ -230,7 +230,7 @@ class TableManager {
 
         const altCell = row.querySelector('td:nth-child(5)');
         if (altCell) {
-            altCell.textContent = `${Math.round(message.coords.alt)} м`;
+            altCell.textContent = `${Math.round(message.coords ? message.coords.alt : "None")} м`;
         }
 
         const timeCell = row.querySelector('td:nth-child(6)');

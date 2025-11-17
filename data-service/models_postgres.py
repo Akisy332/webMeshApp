@@ -198,7 +198,7 @@ class PostgreSQLDatabaseManager:
 
             result = self.db.execute(query, (table_names,), fetch=True)
 
-            # ИСПРАВЛЕНИЕ: result - это список словарей, а не один словарь
+            #result - это список словарей, а не один словарь
             existing_table_names = [row['table_name'] for row in result] if result else []
 
             # Находим отсутствующие таблицы
@@ -223,7 +223,7 @@ class PostgreSQLDatabaseManager:
 
     def check_required_tables(self):
         """Проверка всех необходимых для приложения таблиц"""
-        required_tables = ['sessions', 'message_type', 'data', 'modules']  # Замените на ваши таблицы
+        required_tables = ['sessions', 'message_type', 'data', 'modules']
         
         return self.check_tables_exist(required_tables)
 
@@ -277,10 +277,11 @@ class PostgreSQLDatabaseManager:
             )
             """,
             # Создание индексов для производительности
-            "CREATE INDEX IF NOT EXISTS idx_data_session_module ON data(id_session, id_module)",
+            "CREATE INDEX IF NOT EXISTS idx_data_session_module_id_desc ON data(id_session, id_module, id DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_data_session_gps_ok_module_id_desc ON data(id_session, gps_ok, id_module, id DESC) WHERE gps_ok = true",
+            "CREATE INDEX IF NOT EXISTS idx_data_session_module_gps_ok ON data(id_session, id_module, gps_ok) WHERE gps_ok = true",
             "CREATE INDEX IF NOT EXISTS idx_data_datetime_unix ON data(datetime_unix)",
             "CREATE INDEX IF NOT EXISTS idx_data_module ON data(id_module)",
-            "CREATE INDEX IF NOT EXISTS idx_data_gps_ok ON data(gps_ok) WHERE gps_ok = true",
             "CREATE INDEX IF NOT EXISTS idx_sessions_hidden ON sessions(hidden) WHERE hidden = false",
             "CREATE INDEX IF NOT EXISTS idx_data_datetime ON data(datetime)",
             "CREATE INDEX IF NOT EXISTS idx_data_message_number ON data(message_number)",
@@ -1204,55 +1205,66 @@ class PostgreSQLDatabaseManager:
     def get_last_message(self, id_session: int) -> List[Dict[str, Any]]:
         """
         Возвращает последнее сообщение от каждого модуля для указанной сессии
+        Если нет валидных координат - возвращает coords: null
         """
         last_messages_query = """
-            SELECT 
-                d.*, 
-                m.name as module_name, 
-                m.color as module_color,
-                mt.type as message_type
-            FROM data d
-            JOIN modules m ON d.id_module = m.id
-            JOIN message_type mt ON d.id_message_type = mt.id
-            WHERE d.id_session = %s
-            AND d.id IN (
-                SELECT MAX(id)
+            WITH last_messages AS (
+                SELECT DISTINCT ON (d.id_module)
+                    d.*,
+                    m.name as module_name,
+                    m.color as module_color,
+                    mt.type as message_type
+                FROM data d
+                JOIN modules m ON d.id_module = m.id
+                JOIN message_type mt ON d.id_message_type = mt.id
+                WHERE d.id_session = %s
+                ORDER BY d.id_module, d.id DESC
+            ),
+            last_valid_coords AS (
+                SELECT DISTINCT ON (id_module)
+                    id_module,
+                    lat, lon, alt
                 FROM data
-                WHERE id_session = %s
-                GROUP BY id_module
+                WHERE id_session = %s 
+                    AND gps_ok = TRUE
+                ORDER BY id_module, id DESC
             )
+            SELECT 
+                lm.*,
+                -- Если в последнем сообщении координаты валидны - берем их, иначе из last_valid_coords
+                CASE 
+                    WHEN lm.gps_ok = TRUE THEN lm.lat
+                    ELSE lc.lat  -- Если lc.lat = NULL, то так и останется NULL
+                END as effective_lat,
+                CASE 
+                    WHEN lm.gps_ok = TRUE THEN lm.lon
+                    ELSE lc.lon  -- Если lc.lon = NULL, то так и останется NULL
+                END as effective_lon,
+                CASE 
+                    WHEN lm.gps_ok = TRUE THEN lm.alt
+                    ELSE lc.alt  -- Если lc.alt = NULL, то так и останется NULL
+                END as effective_alt
+            FROM last_messages lm
+            LEFT JOIN last_valid_coords lc ON lm.id_module = lc.id_module
         """
         
         last_messages = self.db.execute(last_messages_query, (id_session, id_session), fetch=True) or []
-        
+        return self._format_messages(last_messages)
+    
+    def _format_messages(self, rows: List) -> List[Dict[str, Any]]:
+        """Форматирование результата"""
         result = []
-        for row in last_messages:
-            lat, lon, alt = row['lat'], row['lon'], row['alt']
+        for row in rows:
+            # Если все координаты NULL - возвращаем coords: null
+            if row['effective_lat'] is None and row['effective_lon'] is None:
+                coords_value = None
+            else:
+                coords_value = {
+                    'lat': row['effective_lat'],
+                    'lon': row['effective_lon'],
+                    'alt': row['effective_alt'] if row['effective_alt'] is not None else 0.0
+                }
             
-            # Если координаты отсутствуют, ищем предыдущие
-            if lat is None or lon is None:
-                coord_data = self.db.execute(
-                    """
-                    SELECT lat, lon, alt 
-                    FROM data 
-                    WHERE id_session = %s 
-                    AND id_module = %s
-                    AND lat IS NOT NULL 
-                    AND lon IS NOT NULL
-                    ORDER BY id DESC
-                    LIMIT 1
-                    """,
-                    params=(id_session, row['id_module']),
-                    fetch_one=True
-                )
-                if coord_data:
-                    if lat is None:
-                        lat = coord_data['lat']
-                    if lon is None:
-                        lon = coord_data['lon']
-                    if alt is None:
-                        alt = coord_data['alt']
-        
             result.append({
                 'id': row['id'],
                 'id_module': format(row['id_module'], 'X'),
@@ -1263,11 +1275,7 @@ class PostgreSQLDatabaseManager:
                 'message_type': row['message_type'],
                 'datetime': row['datetime'].isoformat() if row['datetime'] else None,
                 'datetime_unix': row['datetime_unix'],
-                'coords': {
-                    'lat': lat,
-                    'lon': lon,
-                    'alt': alt if alt is not None else 0.0
-                },
+                'coords': coords_value,  # Может быть NULL
                 'rssi': row['rssi'],
                 'snr': row['snr'],
                 'source': row['source'],
@@ -1275,7 +1283,6 @@ class PostgreSQLDatabaseManager:
                 'gps_ok': bool(row['gps_ok']),
                 'message_number': row['message_number']
             })
-        
         return result
 
     def get_session_data(self, id_session: int, module_ids: List[int] = None, 
