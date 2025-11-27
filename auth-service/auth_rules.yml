@@ -17,8 +17,6 @@ role_minimum_access:
       methods: ["POST"]
     - path: "/api/auth/health"
       methods: ["GET"]
-    - path: "/api/auth/current-user"
-      methods: ["GET"]
 
 
     - path: "/api/database/migrate-sqlite"

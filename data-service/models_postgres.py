@@ -198,7 +198,7 @@ class PostgreSQLDatabaseManager:
 
             result = self.db.execute(query, (table_names,), fetch=True)
 
-            #result - это список словарей, а не один словарь
+            # ИСПРАВЛЕНИЕ: result - это список словарей, а не один словарь
             existing_table_names = [row['table_name'] for row in result] if result else []
 
             # Находим отсутствующие таблицы
@@ -223,7 +223,7 @@ class PostgreSQLDatabaseManager:
 
     def check_required_tables(self):
         """Проверка всех необходимых для приложения таблиц"""
-        required_tables = ['sessions', 'message_type', 'data', 'modules']
+        required_tables = ['sessions', 'message_type', 'data', 'module']  # Замените на ваши таблицы
         
         return self.check_tables_exist(required_tables)
 
@@ -300,11 +300,11 @@ class PostgreSQLDatabaseManager:
     def save_structured_data_batch(self, data: dict, id_session: int) -> Optional[dict]:
         """Публичный метод для сохранения структурированных данных батчем"""
         try:
-            hops = data.get('hops', [])
-            self.logger.info(f"Starting batch save for {len(hops)} hops, session {id_session}")
+            packets = data.get('packets', [])
+            self.logger.info(f"Starting batch save for {len(packets)} packets, session {id_session}")
     
-            if not hops:
-                self.logger.warning("No hops to save")
+            if not packets:
+                self.logger.warning("No packets to save")
                 return None
     
             # ВСЕ операции в ОДНОЙ транзакции
@@ -314,7 +314,7 @@ class PostgreSQLDatabaseManager:
                 batch_data = []
                 
                 # Логируем ВСЕ module_num перед фильтрацией
-                all_module_nums = [hop.get('module_num', 0) for hop in hops]
+                all_module_nums = [subpacket.get('module_num', 0) for subpacket in packets]
                 self.logger.info(f"ALL module_nums before processing: {all_module_nums}")
     
                 datetime_str = data.get('timestamp', datetime.now().isoformat())
@@ -322,13 +322,13 @@ class PostgreSQLDatabaseManager:
                 datetime_unix = int(datetime_obj.timestamp())
                 packet_number = data.get('packet_number', 1)
     
-                for i, hop in enumerate(hops):
-                    module_id = hop.get('module_num', 0)
+                for i, subpacket in enumerate(packets):
+                    module_id = subpacket.get('module_num', 0)
                     if module_id >= 0:  # ← ВАЖНО: фильтруем здесь!
                         module_ids.add(module_id)
-                        lat = hop.get('lat', 0)
-                        lon = hop.get('lng', 0)
-                        alt = hop.get('altitude', 0)
+                        lat = subpacket.get('lat', 0)
+                        lon = subpacket.get('lng', 0)
+                        alt = subpacket.get('altitude', 0)
                         gps_ok = lat != 0 and lon != 0
     
                         batch_data.append((
@@ -1247,12 +1247,12 @@ class PostgreSQLDatabaseManager:
             FROM last_messages lm
             LEFT JOIN last_valid_coords lc ON lm.id_module = lc.id_module
         """
-        
+
         last_messages = self.db.execute(last_messages_query, (id_session, id_session), fetch=True) or []
         return self._format_messages(last_messages)
-    
+
     def _format_messages(self, rows: List) -> List[Dict[str, Any]]:
-        """Форматирование результата"""
+        """Форматирование результата с поддержкой NULL координат"""
         result = []
         for row in rows:
             # Если все координаты NULL - возвращаем coords: null
@@ -1264,7 +1264,7 @@ class PostgreSQLDatabaseManager:
                     'lon': row['effective_lon'],
                     'alt': row['effective_alt'] if row['effective_alt'] is not None else 0.0
                 }
-            
+
             result.append({
                 'id': row['id'],
                 'id_module': format(row['id_module'], 'X'),

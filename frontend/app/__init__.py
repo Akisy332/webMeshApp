@@ -24,16 +24,14 @@ app = Flask(__name__,
 
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'mysecretkey')
 
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SECURE'] = False  # True в production
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-
 socketio = SocketIO(app, 
                     cors_allowed_origins="*", 
                     ping_interval=25, 
                     ping_timeout=5,
                     async_mode='threading',
-                    manage_session=False)  # Важно для cookies
+                    # logger=True,
+                    # engineio_logger=True
+                    )   
 
 # Инициализация Redis-WebSocket моста
 redis_bridge = None

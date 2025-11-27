@@ -68,20 +68,22 @@ def handle_data_provider(conn, address, initial_bytes_data):
             log_message("INFO", f"HEX Data: {hex_with_spaces}", client_info)
 
             # Парсинг сообщения
-            hops, errors = parse_message(data_byte)
+            packets, errors = parse_message(data_byte)
             
             # Формируем данные для веб-интерфейса
             parsed_data = {
                 'hex_data': hex_with_spaces,
-                'hops': [
+                'packets': [
                     {
-                        'module_num': hop.module_num,
-                        'lat': hop.lat,
-                        'lng': hop.lng, 
-                        'altitude': hop.altitude,
-                        'speed': hop.speed,
-                        'roc': hop.roc
-                    } for hop in hops
+                        'module_num': subpacket.module_num,
+                        'packet_type': subpacket.packet_type,
+                        'lat': subpacket.lat,
+                        'lng': subpacket.lng, 
+                        'altitude': subpacket.altitude,
+                        'speed': subpacket.speed,
+                        'roc': subpacket.roc,
+                        'hop': subpacket.hop
+                    } for subpacket in packets
                 ],
                 'errors': errors,
                 'packet_number': scet,
@@ -97,15 +99,15 @@ def handle_data_provider(conn, address, initial_bytes_data):
                 redis_message = {
                     'type': 'valid_module_data',
                     'data': {
-                        'hops': [
+                        'packets': [
                             {
-                                'module_num': hop.module_num,
-                                'lat': hop.lat,
-                                'lng': hop.lng, 
-                                'altitude': hop.altitude,
-                                'speed': hop.speed,
-                                'roc': hop.roc
-                            } for hop in hops
+                                'module_num': subpacket.module_num,
+                                'lat': subpacket.lat,
+                                'lng': subpacket.lng, 
+                                'altitude': subpacket.altitude,
+                                'speed': subpacket.speed,
+                                'roc': subpacket.roc
+                            } for subpacket in packets
                         ],
                         'packet_number': scet
                     },
@@ -120,16 +122,16 @@ def handle_data_provider(conn, address, initial_bytes_data):
                     'data': {
                         'raw_hex': hex_data,  # Сохраняем сырые данные для анализа
                         'parsed_attempt': {
-                            'hops': [
+                            'packets': [
                                 {
-                                    'module_num': hop.module_num,
-                                    'lat': hop.lat,
-                                    'lng': hop.lng, 
-                                    'altitude': hop.altitude,
-                                    'speed': hop.speed,
-                                    'roc': hop.roc
-                                } for hop in hops
-                            ] if hops else []
+                                    'module_num': subpacket.module_num,
+                                    'lat': subpacket.lat,
+                                    'lng': subpacket.lng, 
+                                    'altitude': subpacket.altitude,
+                                    'speed': subpacket.speed,
+                                    'roc': subpacket.roc
+                                } for subpacket in packets
+                            ] if packets else []
                         },
                         'errors': errors,  # Детальная причина ошибки
                         'packet_number': scet

@@ -1,7 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime, timedelta
 import logging
 import signal
 from auth_config import AuthConfig
@@ -18,15 +16,6 @@ app = FastAPI(
     redoc_url="/api/auth/redoc",  # Эндпоинт для ReDoc
     openapi_url="/api/auth/openapi.json"  # Эндпоинт для OpenAPI spec
 )
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5000", "http://frontend-service:5000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 logger = logging.getLogger("auth-service")
 auth_config = AuthConfig()
 
@@ -108,7 +97,7 @@ async def validate_for_traefik(request: Request, db_manager=Depends(get_db_manag
         return Response(status_code=500)
 
 @app.post("/api/auth/login")
-async def login(login_data: LoginRequest, response: Response, db_manager=Depends(get_db_manager)):
+async def login(login_data: LoginRequest, db_manager=Depends(get_db_manager)):
     """Аутентификация пользователя"""
     try:
         import requests
@@ -144,31 +133,12 @@ async def login(login_data: LoginRequest, response: Response, db_manager=Depends
         # Сохранение refresh token
         store_refresh_token(db_manager, user_data["id"], refresh_token)
         
-         # 🔐 УСТАНАВЛИВАЕМ HTTP-ONLY COOKIES
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            httponly=True,
-            secure=False,  # True в production (HTTPS)
-            samesite="lax",
-            max_age=900,  # 15 минут
-            path="/"
-        )
-        
-        response.set_cookie(
-            key="refresh_token",
-            value=refresh_token,
-            httponly=True,
-            secure=False,
-            samesite="lax",
-            max_age=7*24*60*60,  # 7 дней
-            path="/api/auth/refresh"  # Только для эндпоинта обновления
-        )
-        
-        # Возвращаем только данные пользователя (без токенов)
         return {
-            "user": user_data,
-            "message": "Login successful"
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "expires_in": 900,
+            "user": user_data
         }
         
     except HTTPException:
@@ -194,38 +164,19 @@ async def validate_token(token_data: TokenValidationRequest):
     }
 
 @app.post("/api/auth/refresh")
-async def refresh_tokens(request: Request, response: Response, db_manager=Depends(get_db_manager)):
-    """Обновление токенов через HTTP-Only cookie"""
+async def refresh_tokens(refresh_data: dict, db_manager=Depends(get_db_manager)):
+    """Обновление токенов"""
     try:
-        # Получаем refresh token из cookie
-        refresh_token = request.cookies.get("refresh_token")
+        refresh_token = refresh_data.get("refresh_token")
         if not refresh_token:
-            raise HTTPException(401, "Refresh token required")
+            raise HTTPException(400, "Refresh token required")
         
         # Проверка refresh token
         payload = verify_token(refresh_token)
         if not payload or payload.get('type') != 'refresh':
             raise HTTPException(401, "Invalid refresh token")
         
-        # Создаем новые токены
-        access_token = create_access_token({
-            "sub": payload.get("sub"),
-            "user_id": payload.get("user_id"),
-            "role": payload.get("role", "user")
-        })
-        
-        # Обновляем access token cookie
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            httponly=True,
-            secure=False,
-            samesite="lax",
-            max_age=900,
-            path="/"
-        )
-        
-        return {"message": "Tokens refreshed successfully"}
+        # ... остальная логика обновления токенов ...
         
     except HTTPException:
         raise
@@ -234,34 +185,23 @@ async def refresh_tokens(request: Request, response: Response, db_manager=Depend
         raise HTTPException(500, "Internal server error")
 
 @app.post("/api/auth/logout")
-async def logout(response: Response):
-    """Выход пользователя с очисткой cookies"""
+async def logout(logout_data: dict, db_manager=Depends(get_db_manager)):
+    """Выход пользователя"""
     try:
-        response.delete_cookie("access_token", path="/")
-        response.delete_cookie("refresh_token", path="/api/auth/refresh")
+        refresh_token = logout_data.get("refresh_token")
+        if refresh_token:
+            from app.auth import revoke_refresh_token
+            token_hash = revoke_refresh_token(refresh_token)
+            db_manager.db.execute(
+                "UPDATE refresh_tokens SET revoked = TRUE WHERE token_hash = %s",
+                (token_hash,)
+            )
+        
         return {"message": "Successfully logged out"}
+        
     except Exception as e:
         logger.error(f"Logout error: {e}")
         raise HTTPException(500, "Internal server error")
-
-@app.get("/api/auth/current-user")
-async def get_current_user(request: Request):
-    """Получение текущего пользователя из access token"""
-    access_token = request.cookies.get("access_token")
-    
-    if not access_token:
-        raise HTTPException(401, "Not authenticated")
-    
-    payload = verify_token(access_token)
-    if not payload or payload.get('type') != 'access':
-        raise HTTPException(401, "Invalid token")
-    
-    return {
-        "username": payload.get("sub"),
-        "user_id": payload.get("user_id"),
-        "role": payload.get("role"),
-        "permissions": payload.get("permissions", [])
-    }
 
 @app.get("/api/auth/health")
 async def health_check():

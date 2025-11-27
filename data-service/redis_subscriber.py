@@ -114,37 +114,37 @@ class RedisSubscriber:
     def _process_valid_module_data(self, data: dict):
         """Обработка ВАЛИДНЫХ данных модуля"""
         try:
-            hops = data.get('hops', [])
-            logger.info(f"Processing VALID module data with {len(hops)} hops")
+            packets = data.get('packets', [])
+            logger.info(f"Processing VALID module data with {len(packets)} packets")
 
             # Детальное логирование всех хопов
-            for i, hop in enumerate(hops):
-                module_num = hop.get('module_num', 0)
-                logger.info(f"Hop {i}: module_num={module_num}, lat={hop.get('lat')}, lng={hop.get('lng')}")
+            for i, subpacket in enumerate(packets):
+                module_num = subpacket.get('module_num', 0)
+                logger.info(f"Hop {i}: module_num={module_num}, lat={subpacket.get('lat')}, lng={subpacket.get('lng')}")
 
             # Фильтруем нулевые module_id
             valid_hops = []
             invalid_hops = []
 
-            for hop in hops:
-                module_num = hop.get('module_num', 0)
+            for subpacket in packets:
+                module_num = subpacket.get('module_num', 0)
                 if module_num >= 0:
-                    valid_hops.append(hop)
+                    valid_hops.append(subpacket)
                 else:
-                    invalid_hops.append(hop)
+                    invalid_hops.append(subpacket)
 
-            logger.info(f"Valid hops: {len(valid_hops)}, Invalid hops (module_num <= 0): {len(invalid_hops)}")
+            logger.info(f"Valid packets: {len(valid_hops)}, Invalid packets (module_num <= 0): {len(invalid_hops)}")
 
             if invalid_hops:
-                logger.warning(f"Filtered out hops with module_num: {[h.get('module_num') for h in invalid_hops]}")
+                logger.warning(f"Filtered out packets with module_num: {[h.get('module_num') for h in invalid_hops]}")
 
             if not valid_hops:
-                logger.warning("No valid hops after filtering")
+                logger.warning("No valid packets after filtering")
                 return
 
             # Обновляем данные с отфильтрованными хопами
             filtered_data = data.copy()
-            filtered_data['hops'] = valid_hops
+            filtered_data['packets'] = valid_hops
 
             # Получаем сессию
             id_session = self.db_manager.last_session
