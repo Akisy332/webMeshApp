@@ -1,0 +1,95 @@
+/* Стили для системы уведомлений */
+.notification {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    margin-bottom: 10px;
+    overflow: hidden;
+    animation: slideInRight 0.3s ease-out;
+    border-left: 4px solid;
+}
+
+.notification.warning {
+    border-left-color: #ff0000;
+}
+
+.notification.note {
+    border-left-color: #17a2b8;
+}
+
+.notification-content {
+    padding: 15px;
+}
+
+.notification-header {
+    display: flex;
+    justify-content: between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.notification-title {
+    font-weight: 600;
+    font-size: 1.1em;
+    margin: 0;
+}
+
+.notification.warning .notification-title {
+    color: #ff0000;
+}
+
+.notification.note .notification-title {
+    color: #0c5460;
+}
+
+.notification-message {
+    margin: 0;
+    color: #6c757d;
+}
+
+.notification-close {
+    background: none;
+    border: none;
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.notification-close:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOutRight {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+.notification.hiding {
+    animation: slideOutRight 0.3s ease-in;
+}

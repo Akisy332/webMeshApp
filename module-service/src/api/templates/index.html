@@ -318,12 +318,14 @@
                                 html += `<div class="subpacket-item">
                                     Subpacket ${index + 1} (M${subpacket.module_num}): 
                                     type=${subpacket.packet_type},
+                                    match_signal=${subpacket.match_signal},
                                     lat=${subpacket.lat?.toFixed(6)}, 
                                     lng=${subpacket.lng?.toFixed(6)}, 
                                     alt=${subpacket.altitude}, 
                                     speed=${subpacket.speed}, 
                                     roc=${subpacket.roc},
-                                    hop=${subpacket.hop}
+                                    hop=${subpacket.hop},
+                                    emergency=${subpacket.emergency},
                                 </div>`;
                             });
                             html += `</div>`;

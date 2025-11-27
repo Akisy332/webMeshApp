@@ -116,36 +116,38 @@ class RedisSubscriber:
         try:
             packets = data.get('packets', [])
             logger.info(f"Processing VALID module data with {len(packets)} packets")
-
+    
             # Детальное логирование всех хопов
             for i, subpacket in enumerate(packets):
                 module_num = subpacket.get('module_num', 0)
-                logger.info(f"Hop {i}: module_num={module_num}, lat={subpacket.get('lat')}, lng={subpacket.get('lng')}")
-
+                emergency = subpacket.get('emergency', 0)
+                match_signal = subpacket.get('match_signal', 0)
+                logger.info(f"Hop {i}: module_num={module_num}, lat={subpacket.get('lat')}, lng={subpacket.get('lng')}, emergency={emergency}, match_signal={match_signal}")
+    
             # Фильтруем нулевые module_id
             valid_hops = []
             invalid_hops = []
-
+    
             for subpacket in packets:
                 module_num = subpacket.get('module_num', 0)
                 if module_num >= 0:
                     valid_hops.append(subpacket)
                 else:
                     invalid_hops.append(subpacket)
-
-            logger.info(f"Valid packets: {len(valid_hops)}, Invalid packets (module_num <= 0): {len(invalid_hops)}")
-
+    
+            logger.info(f"Valid packets: {len(valid_hops)}, Invalid packets (module_num < 0): {len(invalid_hops)}")
+    
             if invalid_hops:
                 logger.warning(f"Filtered out packets with module_num: {[h.get('module_num') for h in invalid_hops]}")
-
+    
             if not valid_hops:
                 logger.warning("No valid packets after filtering")
                 return
-
+    
             # Обновляем данные с отфильтрованными хопами
             filtered_data = data.copy()
             filtered_data['packets'] = valid_hops
-
+    
             # Получаем сессию
             id_session = self.db_manager.last_session
             if not id_session or id_session == 0:
@@ -156,23 +158,26 @@ class RedisSubscriber:
                 else:
                     logger.error("No sessions available in database")
                     return
-
+    
             # Сохраняем данные
             saved_data = self.db_manager.save_structured_data_batch(filtered_data, id_session)
-
+    
             if not saved_data:
                 logger.error("Failed to save data to database")
                 return
-
+    
+            # ДОБАВЛЯЕМ ИНФОРМАЦИЮ О EMERGENCY И MATCH_SIGNAL В ВЫХОДНЫЕ ДАННЫЕ
+            enhanced_data = self._enhance_saved_data(saved_data, valid_hops)
+    
             # Подготовка сообщения
             frontend_message = {
                 'type': 'module_data', 
-                'data': saved_data,
+                'data': enhanced_data,  # Используем расширенные данные
                 'id_session': id_session,
                 'timestamp': data.get('timestamp'),
                 'test_diagnostic': True
             }
-
+            
             # Публикация с перехватом исключений
             try:
                 success = self.redis_client.publish('frontend_updates', frontend_message)
@@ -200,3 +205,55 @@ class RedisSubscriber:
 
         except Exception as e:
             logger.error(f"Error in _process_valid_module_data: {e}")
+            
+    def _enhance_saved_data(self, saved_data: dict, valid_hops: list) -> dict:
+        """
+        Интегрирует emergency и match_signal непосредственно в данные каждого модуля.
+        Агрегирует флаги через побитовое ИЛИ.
+        """
+        enhanced_data = saved_data.copy()
+
+        # Агрегируем флаги по module_num
+        module_flags = {}
+
+        for hop in valid_hops:
+            module_num = hop.get('module_num')
+            if module_num is not None:
+                if module_num not in module_flags:
+                    module_flags[module_num] = {
+                        'emergency': 0,
+                        'match_signal': 0,
+                        'packet_type': hop.get('packet_type', 0)
+                    }
+
+                # Используем побитовое ИЛИ для поднятия флагов
+                module_flags[module_num]['emergency'] |= hop.get('emergency', 0)
+                module_flags[module_num]['match_signal'] |= hop.get('match_signal', 0)
+
+        # Если saved_data содержит данные по модулям, добавляем агрегированные поля
+        if 'modules' in enhanced_data:
+            for module_data in enhanced_data['modules']:
+                module_num = module_data.get('module_num')
+                if module_num is not None and module_num in module_flags:
+                    flags = module_flags[module_num]
+                    module_data['emergency'] = flags['emergency']
+                    module_data['match_signal'] = flags['match_signal']
+                    module_data['packet_type'] = flags['packet_type']
+
+        # Также добавляем общую агрегированную информацию
+        enhanced_data['signal_info'] = module_flags
+
+        # Добавляем summary
+        emergency_modules = [module_num for module_num, flags in module_flags.items() if flags['emergency'] == 1]
+        match_signal_modules = [module_num for module_num, flags in module_flags.items() if flags['match_signal'] == 1]
+
+        enhanced_data['signal_summary'] = {
+            'total_emergency': len(emergency_modules),
+            'emergency_modules': emergency_modules,
+            'total_match_signal': len(match_signal_modules),
+            'match_signal_modules': match_signal_modules
+        }
+
+        logger.info(f"Aggregated signals - Emergency: {len(emergency_modules)} modules, Match Signal: {len(match_signal_modules)} modules")
+
+        return enhanced_data

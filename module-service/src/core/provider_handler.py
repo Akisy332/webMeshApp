@@ -77,12 +77,14 @@ def handle_data_provider(conn, address, initial_bytes_data):
                     {
                         'module_num': subpacket.module_num,
                         'packet_type': subpacket.packet_type,
+                        'match_signal': subpacket.match_signal,
                         'lat': subpacket.lat,
                         'lng': subpacket.lng, 
                         'altitude': subpacket.altitude,
                         'speed': subpacket.speed,
                         'roc': subpacket.roc,
-                        'hop': subpacket.hop
+                        'hop': subpacket.hop,
+                        'emergency': subpacket.emergency,
                     } for subpacket in packets
                 ],
                 'errors': errors,
@@ -102,11 +104,15 @@ def handle_data_provider(conn, address, initial_bytes_data):
                         'packets': [
                             {
                                 'module_num': subpacket.module_num,
+                                'packet_type': subpacket.packet_type,
+                                'match_signal': subpacket.match_signal,
+                                'altitude': subpacket.altitude,
                                 'lat': subpacket.lat,
                                 'lng': subpacket.lng, 
-                                'altitude': subpacket.altitude,
                                 'speed': subpacket.speed,
-                                'roc': subpacket.roc
+                                'roc': subpacket.roc,
+                                'hop': subpacket.hop,
+                                'emergency': subpacket.emergency,
                             } for subpacket in packets
                         ],
                         'packet_number': scet

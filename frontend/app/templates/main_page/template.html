@@ -15,6 +15,9 @@
     </div>
 </div>
 
+<!-- Система уведомлений -->
+<div id="notification-system" class="position-fixed" style="top: 20px; right: 20px; z-index: 9999; max-width: 400px;"></div>
+
 <div class="container-fluid vh-100 d-flex p-0 position-relative">
     <!-- Панель отладки слева - с абсолютным позиционированием -->
     <div class="position-absolute h-100" id="debug-panel-container" style="z-index: 1000;">
@@ -628,5 +631,107 @@
 
     // Расширение функциональности для работы с аутентификацией
     // Можно добавить в существующие менеджеры проверки аутентификации
+
+    // Система уведомлений
+    class NotificationSystem {
+        constructor() {
+            this.container = document.getElementById('notification-system');
+            if (!this.container) {
+                this.createContainer();
+            }
+        }
+
+        createContainer() {
+            this.container = document.createElement('div');
+            this.container.id = 'notification-system';
+            this.container.className = 'position-fixed';
+            this.container.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
+            document.body.appendChild(this.container);
+        }
+
+        showWarning(moduleName) {
+            this.showNotification({
+                type: 'warning',
+                title: 'Требуется помощь',
+                message: `Требуется срочная помощь: ${moduleName}.`,
+                module: moduleName
+            });
+        }
+
+        showNote(moduleName) {
+            this.showNotification({
+                type: 'note',
+                title: 'Требуется подбор',
+                message: `Необходим подбор с земли: ${moduleName}.`,
+                module: moduleName
+            });
+        }
+
+        showNotification(config) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${config.type}`;
+
+            notification.innerHTML = `
+                <div class="notification-content">
+                    <div class="notification-header">
+                        <h4 class="notification-title">${config.title}</h4>
+                    </div>
+                    <p class="notification-message">${config.message}</p>
+                    <div class="mt-3">
+                        <button class="btn btn-sm btn-primary" onclick="notificationSystem.acceptNotification(this.parentElement.parentElement.parentElement)">
+                            Принято
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            this.container.appendChild(notification);
+
+            // Автоматическое закрытие через 10 секунд
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    this.closeNotification(notification);
+                }
+            }, 10000);
+        }
+
+        closeNotification(notification) {
+            notification.classList.add('hiding');
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }
+
+        acceptNotification(notification) {
+            // Можно добавить логику при принятии уведомления
+            console.log('Уведомление принято:', notification);
+            this.closeNotification(notification);
+        }
+
+        clearAll() {
+            const notifications = this.container.querySelectorAll('.notification');
+            notifications.forEach(notification => {
+                this.closeNotification(notification);
+            });
+        }
+    }
+
+    // Глобальная инициализация системы уведомлений
+    const notificationSystem = new NotificationSystem();
+
+    // Глобальные функции для вызова из любого места JS
+    window.showWarning = (moduleName) => {
+        notificationSystem.showWarning(moduleName);
+    };
+
+    window.showNote = (moduleName) => {
+        notificationSystem.showNote(moduleName);
+    };
+
+    window.clearNotifications = () => {
+        notificationSystem.clearAll();
+    };
 </script>
 {% endblock %}

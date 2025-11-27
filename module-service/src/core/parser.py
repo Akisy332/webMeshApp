@@ -1,19 +1,17 @@
-"""
-Простой парсер GL сообщений телеметрии.
-"""
-
-import struct
 from typing import List, Tuple, NamedTuple
+import struct
 
 class HopData(NamedTuple):
-    module_num: int  # 8 бит
-    packet_type: int # 3 бита
-    altitude: int    # 13 бит  
-    lat: float       # 22 бит  
-    lng: float       # 23 бита 
-    speed: int       # 7 бит   
-    roc: int         # 7 бит
-    hop: int         # 1 бит
+    module_num: int   # 8 бит
+    packet_type: int  # 2 бита  
+    match_signal: int # 1 бит
+    altitude: int     # 13 бит  
+    lat: float        # 22 бит  
+    lng: float        # 23 бита 
+    speed: int        # 7 бит   
+    roc: int          # 7 бит
+    hop: int          # 4 бита
+    emergency: int    # 1 бит
 
 # Константы для парсинга
 HEADER = b'GL'
@@ -27,39 +25,49 @@ LNG_SCALE_FACTOR = 1e-4
 
 # Битовые размеры полей
 MODULE_NUM_BITS = 8
-PACKET_TYPE_BITS = 3
+PACKET_TYPE_BITS = 2
+MATCH_SIGNAL_BITS = 1
 ALT_BITS = 13  
 LAT_BITS = 22
 LNG_BITS = 23
 SPEED_BITS = 7
 ROC_BITS = 7
 HOP_BITS = 4
+EMERGENCY_BITS = 1
 
-# Смещения в 16-битном пакете
-PACKET_TYPE_SHIFT = 13
+# Смещения в 16-битном пакете (data1)
+PACKET_TYPE_SHIFT = 14
+MATCH_SIGNAL_SHIFT = 13
 ALT_SHIFT = 0
 
-# Смещения в 64-битном пакете
+# Смещения в 64-битном пакете (data2)
 LAT_SHIFT = 42
 LNG_SHIFT = 19  
 SPEED_SHIFT = 12
 ROC_SHIFT = 5
 HOP_SHIFT = 1
+EMERGENCY_SHIFT = 0
 
 def _create_mask(bits: int) -> int:
     """Создает битовую маску для указанного количества битов."""
     return (1 << bits) - 1
 
 # Создаем маски на основе битовых размеров
-PACKET_MASK = _create_mask(PACKET_TYPE_BITS)
+PACKET_TYPE_MASK = _create_mask(PACKET_TYPE_BITS)
+MATCH_SIGNAL_MASK = _create_mask(MATCH_SIGNAL_BITS)
 ALT_MASK = _create_mask(ALT_BITS)
 LAT_MASK = _create_mask(LAT_BITS)
 LNG_MASK = _create_mask(LNG_BITS)
 SPEED_MASK = _create_mask(SPEED_BITS)
 ROC_MASK = _create_mask(ROC_BITS)
 HOP_MASK = _create_mask(HOP_BITS)
+EMERGENCY_MASK = _create_mask(EMERGENCY_BITS)
 
-from src.utils.logger import log_message
+def _to_signed(value: int, bits: int) -> int:
+    """Преобразует беззнаковое значение в знаковое."""
+    if value >= (1 << (bits - 1)):
+        return value - (1 << bits)
+    return value
 
 def parse_message(data: bytes) -> Tuple[List[HopData], List[str]]:
     """
@@ -107,38 +115,37 @@ def parse_message(data: bytes) -> Tuple[List[HopData], List[str]]:
             data1 = struct.unpack('>H', submessage[1:3])[0]
             data2 = struct.unpack('>Q', submessage[3:11])[0]
             
-            # Битовые поля
-            packet_type = (data1 >> PACKET_TYPE_SHIFT) & PACKET_MASK
+            # Битовые поля из data1 (16 бит)
+            packet_type = (data1 >> PACKET_TYPE_SHIFT) & PACKET_TYPE_MASK
+            match_signal = (data1 >> MATCH_SIGNAL_SHIFT) & MATCH_SIGNAL_MASK
             altitude = (data1 >> ALT_SHIFT) & ALT_MASK
             
+            # Битовые поля из data2 (64 бита)
             lat_raw = (data2 >> LAT_SHIFT) & LAT_MASK
             lng_raw = (data2 >> LNG_SHIFT) & LNG_MASK
             speed = (data2 >> SPEED_SHIFT) & SPEED_MASK
             roc = (data2 >> ROC_SHIFT) & ROC_MASK
             hop = (data2 >> HOP_SHIFT) & HOP_MASK
+            emergency = (data2 >> EMERGENCY_SHIFT) & EMERGENCY_MASK
             
             # Преобразуем координаты
             lat = _to_signed(lat_raw, LAT_BITS) * LAT_SCALE_FACTOR
             lng = _to_signed(lng_raw, LNG_BITS) * LNG_SCALE_FACTOR
             
             hops.append(HopData(
-                packet_type=packet_type,
                 module_num=module_num,
+                packet_type=packet_type,
+                match_signal=match_signal,
                 altitude=altitude,
                 lat=lat,
                 lng=lng,
                 speed=speed,
                 roc=roc,
-                hop=hop
+                hop=hop,
+                emergency=emergency
             ))
             
         except Exception as e:
             errors.append(f"Error parsing message {i}: {e}")
     
     return hops, errors
-
-def _to_signed(value: int, bits: int) -> int:
-    """Преобразует беззнаковое значение в знаковое."""
-    if value >= (1 << (bits - 1)):
-        return value - (1 << bits)
-    return value

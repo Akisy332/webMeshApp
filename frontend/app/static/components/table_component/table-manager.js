@@ -16,7 +16,11 @@ class TableManager {
 
         eventBus.on(EventTypes.SOCKET.NEW_DATA_MODULE, (data) => {
             if (!data || !data.points) return;
+
             this.updateTable(data.points);
+
+            // Обработка emergency и match_signal флагов
+            this.processSignals(data);
         });
 
         // Подписка на событие загрузки новой сессии
@@ -33,6 +37,40 @@ class TableManager {
                 this.clearTable();
             }
             this.currentSession = session;
+        });
+    }
+
+    // Добавляем метод для обработки сигналов
+    processSignals(data) {
+        if (!data.signal_info || !data.points) return;
+
+        const signalInfo = data.signal_info;
+        const points = data.points;
+
+        // Создаем карту модулей для быстрого доступа
+        const moduleMap = {};
+        points.forEach(point => {
+            moduleMap[point.id_module] = point;
+        });
+
+        // Обрабатываем каждый модуль из signal_info
+        Object.keys(signalInfo).forEach(moduleId => {
+            const signals = signalInfo[moduleId];
+            const module = moduleMap[moduleId];
+
+            if (!module) return;
+
+            const moduleName = module.module_name || `Module ${moduleId}`;
+
+            // Обработка emergency сигнала
+            if (signals.emergency === 1) {
+                showWarning(moduleName);
+            }
+
+            // Обработка match_signal
+            if (signals.match_signal === 1) {
+                showNote(moduleName);
+            }
         });
     }
 
