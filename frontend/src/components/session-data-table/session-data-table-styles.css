@@ -1,0 +1,85 @@
+/* session-data-table-styles.css */
+.session-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+
+.session-data-header {
+    background: #f8f9fa;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.session-data-body {
+    overflow-y: auto;
+}
+
+.session-data-row {
+    transition: background-color 0.2s ease;
+}
+
+.session-data-row:hover {
+    background-color: #e3f2fd !important;
+}
+
+.session-data-cell {
+    padding: 8px 6px;
+    border-bottom: 1px solid #dee2e6;
+    vertical-align: middle;
+}
+
+/* Специфичные стили для ячеек сессии */
+.session-status-cell {
+    text-align: center;
+    width: 60px;
+}
+
+.session-checkbox-cell {
+    text-align: center;
+    width: 80px;
+}
+
+.session-checkbox-cell input[type='checkbox'] {
+    cursor: pointer;
+    transform: scale(1.2);
+}
+
+.session-module-name-cell {
+    font-weight: 500;
+}
+
+.session-altitude-cell {
+    text-align: right;
+    font-family: 'Courier New', monospace;
+}
+
+.session-time-cell {
+    text-align: center;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+/* Статусные точки */
+.status-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    cursor: help;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .session-data-cell {
+        padding: 6px 4px;
+        font-size: 0.85em;
+    }
+
+    .session-status-cell,
+    .session-checkbox-cell {
+        width: 50px;
+    }
+}

@@ -4,6 +4,7 @@ from flask_socketio import SocketIO
 import os
 import logging
 import time
+import jinja2
 
 # Настройка логирования
 # Настройка логирования
@@ -18,9 +19,20 @@ logging.basicConfig(
 
 logger = logging.getLogger('frontend')
 
+base_dir = os.path.dirname(os.path.abspath(__file__))
+templates_path = os.path.join(base_dir, 'templates')
+src_path = os.path.dirname(base_dir)
+components_path = os.path.join(src_path, 'src')
+
 app = Flask(__name__, 
-           static_folder='static',
-           template_folder='templates')
+           static_folder=os.path.join(base_dir, 'static'),
+           template_folder=templates_path)
+
+# Игнорируем проверку типов для этого присваивания
+app.jinja_loader = jinja2.ChoiceLoader([  # type: ignore
+    jinja2.FileSystemLoader(templates_path),
+    jinja2.FileSystemLoader(components_path)
+])
 
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'mysecretkey')
 

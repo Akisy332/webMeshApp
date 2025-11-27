@@ -19,9 +19,9 @@ export class SlidePanel {
 
     private init(): void {
         console.log('SlidePanel initializing...');
-        
+
         this.bindEvents();
-        
+
         console.log('SlidePanel initialized');
     }
 
@@ -48,7 +48,7 @@ export class SlidePanel {
         this.isOpen = true;
         this.panel.classList.add('open');
         document.body.style.overflow = 'hidden';
-        
+
         if (!this.isTableLoading) {
             if (!this.isTableLoaded) {
                 this.loadTable();
@@ -69,8 +69,8 @@ export class SlidePanel {
 
     private async loadTable(): Promise<void> {
         this.isTableLoading = true;
-        console.log("Loading table...");
-        
+        console.log('Loading table...');
+
         if (!this.isTableLoaded) {
             this.tableContent.innerHTML = `
                 <div class="text-center py-5">
@@ -89,7 +89,7 @@ export class SlidePanel {
                 this.tableContent.innerHTML = html;
                 this.isTableLoaded = true;
                 this.isTableLoading = false;
-                
+
                 // Инициализируем таблицу после загрузки DOM
                 setTimeout(() => {
                     this.initializeTableAndControls();
@@ -134,7 +134,7 @@ export class SlidePanel {
                 rowHeight: 45,
                 buffer: 50,
                 cleanupThreshold: 500,
-                preloadThreshold: 100
+                preloadThreshold: 100,
             });
 
             // Сохраняем ссылку на элемент панели
@@ -225,14 +225,14 @@ export class SlidePanel {
         const tabBtns = document.querySelectorAll('#table-content .tab-btn');
         const tabContents = document.querySelectorAll('#table-content .controls-content');
 
-        tabBtns.forEach(btn => {
+        tabBtns.forEach((btn) => {
             btn.addEventListener('click', () => {
                 const tabName = (btn as HTMLElement).dataset.tab;
                 if (!tabName) return;
 
                 // Деактивируем все вкладки
-                tabBtns.forEach(b => b.classList.remove('active'));
-                tabContents.forEach(content => content.classList.remove('active'));
+                tabBtns.forEach((b) => b.classList.remove('active'));
+                tabContents.forEach((content) => content.classList.remove('active'));
 
                 // Активируем выбранную вкладку
                 btn.classList.add('active');
@@ -270,7 +270,8 @@ export class SlidePanel {
 
                 if (!value) {
                     if (statusElement) {
-                        statusElement.innerHTML = '<span class="text-danger">Пожалуйста, введите значение для поиска</span>';
+                        statusElement.innerHTML =
+                            '<span class="text-danger">Пожалуйста, введите значение для поиска</span>';
                     }
                     return;
                 }
@@ -348,7 +349,7 @@ export class SlidePanel {
         const columnToggles = document.querySelectorAll('#table-content .column-toggle');
         const resetColumns = document.querySelector('#table-content #reset-columns') as HTMLElement;
 
-        columnToggles.forEach(checkbox => {
+        columnToggles.forEach((checkbox) => {
             checkbox.addEventListener('change', () => {
                 const columnKey = (checkbox as HTMLElement).dataset.column;
                 const isVisible = (checkbox as HTMLInputElement).checked;
@@ -397,7 +398,7 @@ export class SlidePanel {
         // Очистка событий
         this.toggleBtn.removeEventListener('click', this.toggle);
         document.removeEventListener('keydown', this.handleEscapeKey);
-        
+
         // Уничтожаем виртуальную таблицу если она существует
         if (this.virtualTable) {
             this.virtualTable.destroy();
@@ -406,5 +407,5 @@ export class SlidePanel {
 
     private handleEscapeKey = (e: KeyboardEvent) => {
         if (e.key === 'Escape') this.close();
-    }
+    };
 }

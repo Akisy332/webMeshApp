@@ -21,11 +21,11 @@ export class DebugPanel {
 
     private init(): void {
         console.log('DebugPanel initializing...');
-        
+
         this.bindEvents();
         this.loadPanelState();
         this.addLog('Панель отладки инициализирована');
-        
+
         console.log('DebugPanel initialized');
     }
 
@@ -139,7 +139,7 @@ export class DebugPanel {
 
     private handleTestButton(): void {
         this.addLog('Тестовая кнопка нажата');
-        
+
         // Тестовые действия
         this.testEventBus();
         this.testServices();
@@ -147,11 +147,11 @@ export class DebugPanel {
 
     private testEventBus(): void {
         this.addLog('Проверка EventBus...');
-        
+
         // Проверяем доступность eventBus
         if (eventBus) {
             this.addLog('EventBus: доступен');
-            
+
             // Тестовое событие
             eventBus.emit('debug:test', { message: 'Тест отладки' });
             this.addLog('EventBus: тестовое событие отправлено');
@@ -162,16 +162,16 @@ export class DebugPanel {
 
     private testServices(): void {
         this.addLog('Проверка сервисов...');
-        
+
         // Проверяем доступность основных сервисов
         const services = [
             { name: 'AuthService', instance: window.mainApp?.getAuthService?.() },
             { name: 'TableService', instance: window.mainApp?.getTableService?.() },
             { name: 'SessionService', instance: window.mainApp?.getSessionService?.() },
-            { name: 'MapService', instance: window.mainApp?.getMapService?.() }
+            { name: 'MapService', instance: window.mainApp?.getMapService?.() },
         ];
 
-        services.forEach(service => {
+        services.forEach((service) => {
             if (service.instance) {
                 this.addLog(`${service.name}: доступен`);
             } else {
@@ -183,13 +183,13 @@ export class DebugPanel {
     public testConnection(url: string): Promise<void> {
         return new Promise((resolve, reject) => {
             this.addLog(`Тестирование соединения с: ${url}`);
-            
+
             fetch(url, { method: 'HEAD' })
-                .then(response => {
+                .then((response) => {
                     this.addLog(`Соединение с ${url}: OK (${response.status})`);
                     resolve();
                 })
-                .catch(error => {
+                .catch((error) => {
                     this.addLog(`Соединение с ${url}: ERROR - ${error.message}`);
                     reject(error);
                 });
@@ -203,22 +203,22 @@ export class DebugPanel {
             userAgent: navigator.userAgent,
             viewport: {
                 width: window.innerWidth,
-                height: window.innerHeight
+                height: window.innerHeight,
             },
             services: {
                 authService: !!window.mainApp?.getAuthService?.(),
                 tableService: !!window.mainApp?.getTableService?.(),
                 sessionService: !!window.mainApp?.getSessionService?.(),
-                mapService: !!window.mainApp?.getMapService?.()
-            }
+                mapService: !!window.mainApp?.getMapService?.(),
+            },
         };
     }
 
     public exportLogs(): void {
         const logs = Array.from(this.logsContainer.children)
-            .map(element => element.textContent)
+            .map((element) => element.textContent)
             .join('\n');
-        
+
         const blob = new Blob([logs], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -228,7 +228,7 @@ export class DebugPanel {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        
+
         this.addLog('Логи экспортированы');
     }
 
@@ -236,7 +236,7 @@ export class DebugPanel {
         // Очистка событий с правильными типами
         const errorHandler = (e: ErrorEvent) => this.addLog(`Ошибка: ${e.message}`);
         const rejectionHandler = (e: PromiseRejectionEvent) => this.addLog(`Необработанный Promise: ${e.reason}`);
-        
+
         window.removeEventListener('error', errorHandler);
         window.removeEventListener('unhandledrejection', rejectionHandler);
         window.removeEventListener('resize', this.updateToggleButtonPosition);

@@ -33,7 +33,7 @@ export class AuthService {
                     'Content-Type': 'application/json',
                 },
                 credentials: 'include',
-                body: JSON.stringify({ email, username, password })
+                body: JSON.stringify({ email, username, password }),
             });
 
             if (response.ok) {
@@ -57,7 +57,7 @@ export class AuthService {
                     'Content-Type': 'application/json',
                 },
                 credentials: 'include',
-                body: JSON.stringify({ username, password })
+                body: JSON.stringify({ username, password }),
             });
 
             if (response.ok) {
@@ -112,9 +112,9 @@ export class AuthService {
             credentials: 'include',
             headers: {
                 'Content-Type': 'application/json',
-                ...options.headers
+                ...options.headers,
             },
-            ...options
+            ...options,
         };
 
         try {
@@ -148,7 +148,7 @@ export class AuthService {
         try {
             const response = await fetch(`${API_ENDPOINTS.AUTH}/refresh`, {
                 method: 'POST',
-                credentials: 'include'
+                credentials: 'include',
             });
 
             if (!response.ok) {
@@ -168,23 +168,23 @@ export class AuthService {
 
         if (contentType?.includes('application/json')) {
             const data = await response.json();
-            return response.ok ?
-                { success: true, data } :
-                { success: false, error: data.detail || data.error || 'Request failed' };
+            return response.ok
+                ? { success: true, data }
+                : { success: false, error: data.detail || data.error || 'Request failed' };
         }
 
         const text = await response.text();
-        return response.ok ?
-            { success: true, data: text } :
-            { success: false, error: `HTTP ${response.status}` };
+        return response.ok ? { success: true, data: text } : { success: false, error: `HTTP ${response.status}` };
     }
 
     private onAuthStateChange(authenticated: boolean): void {
         if (authenticated) {
             console.log('User authenticated:', this.user?.username);
-            document.dispatchEvent(new CustomEvent('auth:login', {
-                detail: { user: this.user }
-            }));
+            document.dispatchEvent(
+                new CustomEvent('auth:login', {
+                    detail: { user: this.user },
+                })
+            );
 
             if (this.isAdmin()) {
                 this.loadAdminFeatures();
@@ -199,18 +199,18 @@ export class AuthService {
     }
 
     private updateUIForAuth(): void {
-        document.querySelectorAll('[data-auth-only]').forEach(el => {
+        document.querySelectorAll('[data-auth-only]').forEach((el) => {
             (el as HTMLElement).style.display = 'block';
         });
 
         if (this.isAdmin()) {
-            document.querySelectorAll('[data-admin-only]').forEach(el => {
+            document.querySelectorAll('[data-admin-only]').forEach((el) => {
                 (el as HTMLElement).style.display = 'block';
             });
         }
 
         const userElements = document.querySelectorAll('[data-user-info]');
-        userElements.forEach(el => {
+        userElements.forEach((el) => {
             const field = (el as HTMLElement).dataset.userInfo;
             if (field === 'username' && this.user) {
                 el.textContent = this.user.username;
@@ -219,11 +219,11 @@ export class AuthService {
     }
 
     private updateUIForUnauth(): void {
-        document.querySelectorAll('[data-auth-only]').forEach(el => {
+        document.querySelectorAll('[data-auth-only]').forEach((el) => {
             (el as HTMLElement).style.display = 'none';
         });
 
-        document.querySelectorAll('[data-admin-only]').forEach(el => {
+        document.querySelectorAll('[data-admin-only]').forEach((el) => {
             (el as HTMLElement).style.display = 'none';
         });
     }
@@ -232,11 +232,11 @@ export class AuthService {
         if (!this.user) return false;
 
         const roleHierarchy: Record<string, number> = {
-            'developer': 4,
-            'admin': 3,
-            'curator': 2,
-            'user': 1,
-            'public': 0
+            developer: 4,
+            admin: 3,
+            curator: 2,
+            user: 1,
+            public: 0,
         };
 
         const userLevel = roleHierarchy[this.user.role] || 0;
@@ -253,10 +253,10 @@ export class AuthService {
         if (!this.user) return false;
 
         const permissions: Record<string, string[]> = {
-            'manage_users': ['admin', 'developer'],
-            'view_analytics': ['admin', 'developer', 'curator'],
-            'edit_content': ['admin', 'developer', 'curator'],
-            'basic_access': ['user', 'admin', 'developer', 'curator']
+            manage_users: ['admin', 'developer'],
+            view_analytics: ['admin', 'developer', 'curator'],
+            edit_content: ['admin', 'developer', 'curator'],
+            basic_access: ['user', 'admin', 'developer', 'curator'],
         };
 
         const allowedRoles = permissions[permission] || [];

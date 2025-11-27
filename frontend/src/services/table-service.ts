@@ -13,7 +13,7 @@ export class TableService {
 
     private init(): void {
         console.log('TableService (TypeScript) initializing...');
-        
+
         this.setupEventListeners();
         this.startUpdatingTimes();
     }
@@ -37,13 +37,12 @@ export class TableService {
             }
             this.currentSession = session;
         });
-    
     }
 
     public updateTable(messages: ModuleData[] | Record<string, ModuleData>): void {
         const messagesArray = this.normalizeMessages(messages);
-        
-        messagesArray.forEach(message => {
+
+        messagesArray.forEach((message) => {
             if (this.currentSession && message.id_session === this.currentSession.id) {
                 this.tableData.set(message.id_module, message);
                 this.updateOrCreateTableRow(message);
@@ -97,7 +96,7 @@ export class TableService {
         visibleCheckbox.addEventListener('change', (e) => {
             eventBus.emit(EventTypes.TABLE.CHECKBOX_MARKER, {
                 id_module: message.id_module,
-                flag: (e.target as HTMLInputElement).checked
+                flag: (e.target as HTMLInputElement).checked,
             });
         });
         visibleCell.appendChild(visibleCheckbox);
@@ -111,7 +110,7 @@ export class TableService {
         traceCheckbox.addEventListener('change', (e) => {
             eventBus.emit(EventTypes.TABLE.CHECKBOX_TRACE, {
                 id_module: message.id_module,
-                flag: (e.target as HTMLInputElement).checked
+                flag: (e.target as HTMLInputElement).checked,
             });
         });
         traceCell.appendChild(traceCheckbox);
@@ -225,7 +224,7 @@ export class TableService {
         const diffSeconds = (now - timestamp) / 1000;
 
         const statusText = gpsOk ? 'Активен' : 'Ошибка GPS';
-        
+
         if (diffSeconds < TIME_THRESHOLDS.FRESH) return `${statusText}\nДанные свежие (<60 сек)`;
         if (diffSeconds < TIME_THRESHOLDS.WARNING) return `${statusText}\nДанные устаревают (60-300 сек)`;
         return `${statusText}\nДанные устарели (>300 сек)`;
@@ -241,7 +240,7 @@ export class TableService {
 
         const timestamp = this.normalizeTimestamp(unixTimestamp);
         const messageTime = new Date(timestamp);
-        
+
         if (isNaN(messageTime.getTime())) {
             console.error('Invalid timestamp:', unixTimestamp);
             return 'Н/Д';
@@ -265,14 +264,14 @@ export class TableService {
         const now = new Date();
         const rows = document.querySelectorAll(`#${this.tableId} tr`);
 
-        rows.forEach(row => {
+        rows.forEach((row) => {
             try {
                 const unixTimestamp = row.getAttribute('data-datetime_unix');
                 if (!unixTimestamp) return;
 
                 const timestamp = this.normalizeTimestamp(parseInt(unixTimestamp));
                 const messageTime = new Date(timestamp);
-                
+
                 if (isNaN(messageTime.getTime())) return;
 
                 // Обновление времени
@@ -302,7 +301,7 @@ export class TableService {
 
     public clearTable(): void {
         console.log('🧹 TableService: Clearing table');
-        
+
         const tbody = document.getElementById(this.tableId);
         if (tbody) {
             tbody.innerHTML = '';

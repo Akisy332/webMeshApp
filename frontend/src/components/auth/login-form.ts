@@ -129,6 +129,11 @@ export class LoginForm {
             if (result.success) {
                 this.hide();
                 this.showSuccess(`Добро пожаловать, ${result.user!.username}!`);
+
+                // ПЕРЕЗАГРУЗКА СТРАНИЦЫ после успешного входа
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
             } else {
                 this.showError(result.error || 'Ошибка входа');
             }

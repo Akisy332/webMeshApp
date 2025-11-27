@@ -16,13 +16,13 @@ export class SessionService {
         if (this.isInitialized) return;
 
         console.log('SessionService (TypeScript) initializing...');
-        
+
         // Ждем готовности DOM
         await this.waitForDom();
-        
+
         this.setupEventListeners();
         await this.loadSessions();
-        
+
         this.isInitialized = true;
         console.log('SessionService initialized');
     }
@@ -80,7 +80,6 @@ export class SessionService {
 
             // Восстанавливаем выбранную сессию или выбираем первую
             await this.restoreOrSelectSession();
-
         } catch (error) {
             console.error('SessionService: Error loading sessions:', error);
             this.showErrorState();
@@ -104,7 +103,7 @@ export class SessionService {
         this.dataSelect.add(placeholderOption);
 
         // Добавляем все сессии
-        this.sessions.forEach(session => {
+        this.sessions.forEach((session) => {
             this.dataSelect!.add(new Option(session.name, session.id.toString()));
         });
     }
@@ -117,7 +116,7 @@ export class SessionService {
         let sessionToSelect: Session | null = null;
 
         if (savedSessionId) {
-            sessionToSelect = this.sessions.find(s => s.id.toString() === savedSessionId) || null;
+            sessionToSelect = this.sessions.find((s) => s.id.toString() === savedSessionId) || null;
         }
 
         if (!sessionToSelect) {
@@ -137,7 +136,7 @@ export class SessionService {
         // Отправляем событие о загрузке списка
         eventBus.emit(EventTypes.SESSION.LIST_LOADED, {
             sessions: this.sessions,
-            selectedSession: sessionToSelect
+            selectedSession: sessionToSelect,
         });
     }
 
@@ -151,13 +150,12 @@ export class SessionService {
         localStorage.setItem('selectedSessionId', sessionId.toString());
 
         try {
-            const selectedSession = this.sessions.find(s => s.id === sessionId);
+            const selectedSession = this.sessions.find((s) => s.id === sessionId);
             if (!selectedSession) {
                 throw new Error('Выбранная сессия не найдена в списке');
             }
 
             await this.loadSessionData(selectedSession);
-
         } catch (error) {
             console.error('SessionService: Error loading session data:', error);
             eventBus.emit(EventTypes.ERROR, 'Ошибка загрузки данных сессии');
@@ -170,11 +168,10 @@ export class SessionService {
             if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
 
             const sessionData = await response.json();
-            
+
             // Отправляем события о выбранной сессии и ее данных
             eventBus.emit(EventTypes.SESSION.SELECTED, session);
             eventBus.emit(EventTypes.SESSION.LOAD_DATA, sessionData);
-
         } catch (error) {
             console.error('SessionService: Error loading session details:', error);
             throw error;
@@ -188,7 +185,7 @@ export class SessionService {
     }
 
     public getCurrentSession(): Session | null {
-        return this.sessions.find(s => s.id === this.currentSessionId) || null;
+        return this.sessions.find((s) => s.id === this.currentSessionId) || null;
     }
 
     public getSessions(): Session[] {
@@ -202,7 +199,7 @@ export class SessionService {
     public destroy(): void {
         // Отписываемся от событий
         eventBus.off(EventTypes.SESSION.UPDATED, this.loadSessions);
-        
+
         if (this.dataSelect) {
             this.dataSelect.removeEventListener('change', this.handleSessionChange);
         }

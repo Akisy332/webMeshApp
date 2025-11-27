@@ -1,53 +1,43 @@
 # frontend/app/routes.py
-from flask import render_template, jsonify, request
+from flask import render_template, jsonify, request, session
 from . import app
 import requests
 import logging
+import jwt
 
 logger = logging.getLogger('frontend-routes')
 
 def get_current_user(request):
-    """Получаем данные пользователя через Traefik headers или напрямую"""
+    """Получаем данные пользователя из JWT токена в cookies"""
     
-    # Способ 1: Через Traefik forwardAuth (предпочтительно)
-    user_id = request.headers.get('X-User-Id')
-    username = request.headers.get('X-User-Name')
-    role = request.headers.get('X-User-Role')
+    access_token = request.cookies.get('access_token')
     
-    if user_id and username:
+    if not access_token:
+        logger.debug("No access token found in cookies")
+        return {'authenticated': False, 'role': 'public'}
+    
+    try:
+        # Декодируем JWT токен (в production добавьте verify_signature=True)
+        payload = jwt.decode(access_token, options={"verify_signature": False})
+        
+        logger.debug(f"User authenticated: {payload.get('sub')} with role {payload.get('role')}")
+        
         return {
-            'user_id': user_id,
-            'username': username,
-            'role': role or 'user',
+            'user_id': payload.get('user_id'),
+            'username': payload.get('sub'),
+            'role': payload.get('role', 'user'),
             'authenticated': True
         }
-    
-    # Способ 2: Прямой запрос к auth-service (fallback)
-    try:
-        # Копируем cookies из входящего запроса
-        cookies = {}
-        for cookie_name in request.cookies:
-            cookies[cookie_name] = request.cookies.get(cookie_name)
         
-        auth_response = requests.get(
-            'http://auth-service:8003/api/auth/current-user',
-            cookies=cookies,
-            timeout=3
-        )
-        
-        if auth_response.status_code == 200:
-            user_data = auth_response.json()
-            return {
-                'user_id': user_data.get('user_id'),
-                'username': user_data.get('username'),
-                'role': user_data.get('role', 'user'),
-                'authenticated': True
-            }
+    except jwt.ExpiredSignatureError:
+        logger.warning("Access token expired")
+        return {'authenticated': False, 'role': 'public'}
+    except jwt.InvalidTokenError as e:
+        logger.warning(f"Invalid JWT token: {e}")
+        return {'authenticated': False, 'role': 'public'}
     except Exception as e:
-        logger.warning(f"Direct auth check failed: {e}")
-    
-    # Пользователь не аутентифицирован
-    return {'authenticated': False, 'role': 'public'}
+        logger.error(f"Unexpected error decoding token: {e}")
+        return {'authenticated': False, 'role': 'public'}
 
 # ==================== STATIC PAGES ====================
 

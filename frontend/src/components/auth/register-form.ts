@@ -149,7 +149,7 @@ export class RegisterForm {
         const requirements = {
             length: password.length >= 8,
             digit: /\d/.test(password),
-            uppercase: /[A-Z]/.test(password)
+            uppercase: /[A-Z]/.test(password),
         };
 
         return requirements.length && requirements.digit && requirements.uppercase;

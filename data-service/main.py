@@ -21,6 +21,35 @@ db_manager: Optional[PostgreSQLDatabaseManager] = None
 redis_subscriber: Optional[RedisSubscriber] = None
 logger = logging.getLogger("data-service")
 
+import time
+import functools
+from typing import Callable, Any
+import asyncio
+
+def log_execution_time(func: Callable) -> Callable:
+    """Декоратор для замера времени выполнения функции"""
+    @functools.wraps(func)
+    async def async_wrapper(*args, **kwargs) -> Any:
+        start_time = time.perf_counter()
+        try:
+            result = await func(*args, **kwargs)
+            return result
+        finally:
+            execution_time = time.perf_counter() - start_time
+            logger.info(f"Метод {func.__name__} выполнен за {execution_time:.4f} секунд")
+    
+    @functools.wraps(func)
+    def sync_wrapper(*args, **kwargs) -> Any:
+        start_time = time.perf_counter()
+        try:
+            result = func(*args, **kwargs)
+            return result
+        finally:
+            execution_time = time.perf_counter() - start_time
+            logger.info(f"Метод {func.__name__} выполнен за {execution_time:.4f} секунд")
+    
+    return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
+
 # Хелперы
 def get_db_manager() -> PostgreSQLDatabaseManager:
     """Безопасное получение менеджера БД"""
@@ -397,15 +426,27 @@ async def create_session(session_data: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+def measure_operation(operation: callable, operation_name: str, *args, **kwargs):
+    """Измеряет время выполнения операции и возвращает результат"""
+    start_time = time.perf_counter()
+    try:
+        result = operation(*args, **kwargs)
+        return result
+    finally:
+        execution_time = time.perf_counter() - start_time
+        logger.info(f"Операция '{operation_name}' выполнена за {execution_time:.4f} секунд")
+
+
 @app.get("/api/sessions/{id_session}")
+@log_execution_time
 async def get_session_data(id_session: int):
     """Получение данных конкретной сессии"""
     try:
         current_db = get_db_manager()
         
         data = {}
-        data["modules"] = current_db.get_last_message(id_session)
-        data["map"] = current_db.get_session_map_view(id_session)
+        data["modules"] = measure_operation(current_db.get_last_message, "get_last_message", id_session)
+        data["map"] = measure_operation(current_db.get_session_map_view, "get_session_map_view", id_session)
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -422,18 +463,7 @@ async def delete_session(id_session: int):
         return {"message": "Сессия удалена"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/sessions/data/{id_session}")
-async def get_session_center_radius(id_session: int):
-    """Получение данных конкретной сессии"""
-    try:
-        current_db = get_db_manager()
-        
-        data = current_db.get_session_map_view(id_session)
-        return data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+    
 # ==================== TABLE DATA ENDPOINTS ====================
 
 @app.get("/api/table/users/search")

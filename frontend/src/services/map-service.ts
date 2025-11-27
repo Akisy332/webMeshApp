@@ -96,7 +96,7 @@ class SegmentedPath {
         this.options = {
             color: color,
             weight: 3,
-            opacity: 1
+            opacity: 1,
         };
         this.lastSegmentIndex = 0;
         this.lastPointIndex = 0;
@@ -134,14 +134,14 @@ class SegmentedPath {
     }
 
     private createPaths(): void {
-        this.segmentPaths.forEach(path => this.map.removeLayer(path));
+        this.segmentPaths.forEach((path) => this.map.removeLayer(path));
         this.segmentPaths = [];
 
         for (let i = 0; i < this.segments.length; i++) {
             const path = (window as any).L.polyline([], {
                 color: this.color,
                 weight: 3,
-                opacity: 1
+                opacity: 1,
             });
 
             if (this.visible) {
@@ -165,9 +165,9 @@ class SegmentedPath {
                 </svg>`,
                 iconSize: [48, 48],
                 iconAnchor: [24, 48],
-                popupAnchor: [0, -48]
+                popupAnchor: [0, -48],
             }),
-            opacity: this.visible ? 1 : 0
+            opacity: this.visible ? 1 : 0,
         }).addTo(this.map);
     }
 
@@ -219,20 +219,20 @@ class SegmentedPath {
                 this.segmentPaths[segIdx].setLatLngs(segment.map((p: PathPoint) => p.latlng));
                 this.segmentPaths[segIdx].setStyle({
                     opacity: shouldShowTrace ? 1 : 0,
-                    weight: shouldShowTrace ? 3 : 0
+                    weight: shouldShowTrace ? 3 : 0,
                 });
             } else if (pointsProcessed < pointsToShow.length) {
                 const visibleInSegment = pointsToShow.slice(pointsProcessed, pointsToShow.length);
                 this.segmentPaths[segIdx].setLatLngs(visibleInSegment.map((p: PathPoint) => p.latlng));
                 this.segmentPaths[segIdx].setStyle({
                     opacity: shouldShowTrace ? 1 : 0,
-                    weight: shouldShowTrace ? 3 : 0
+                    weight: shouldShowTrace ? 3 : 0,
                 });
                 break;
             } else {
                 this.segmentPaths[segIdx].setStyle({
                     opacity: 0,
-                    weight: 0
+                    weight: 0,
                 });
             }
 
@@ -259,10 +259,14 @@ class SegmentedPath {
         this.updateSegmentsDisplay();
     }
 
-    public addLatLng(latlng: [number, number] | { lat: number; lng: number }, timestamp: number | null = null, currentTime: number | null = null): this {
+    public addLatLng(
+        latlng: [number, number] | { lat: number; lng: number },
+        timestamp: number | null = null,
+        currentTime: number | null = null
+    ): this {
         const newPoint: PathPoint = {
             latlng: latlng,
-            timestamp: timestamp || 0
+            timestamp: timestamp || 0,
         };
 
         this.allPoints.push(newPoint);
@@ -295,7 +299,7 @@ class SegmentedPath {
             if (latLngs[i].length === 2) {
                 this.allPoints.push({
                     latlng: Array.isArray(latLngs[i]) ? latLngs[i] : [latLngs[i].lat, latLngs[i].lng],
-                    timestamp: timestamp
+                    timestamp: timestamp,
                 });
             }
         }
@@ -330,23 +334,23 @@ class SegmentedPath {
                 timeRange: { min: 0, max: 0 },
                 visible: this.visible,
                 segmentCount: 0,
-                pointCount: 0
+                pointCount: 0,
             };
         }
 
         return {
             timeRange: {
                 min: this.allPoints[0].timestamp,
-                max: this.allPoints[this.allPoints.length - 1].timestamp
+                max: this.allPoints[this.allPoints.length - 1].timestamp,
             },
             visible: this.visible,
             segmentCount: this.segments.length,
-            pointCount: this.allPoints.length
+            pointCount: this.allPoints.length,
         };
     }
 
     public remove(): this {
-        this.segmentPaths.forEach(path => this.map.removeLayer(path));
+        this.segmentPaths.forEach((path) => this.map.removeLayer(path));
         if (this.marker) {
             this.map.removeLayer(this.marker);
         }
@@ -359,19 +363,19 @@ export class MapService {
     private osmLayer: any;
     private GoogleSatteliteLayer: any;
     private baseLayers: any;
-    private layers: Record<string, any>;
     private markers: Map<string, any>;
     private paths: Map<string, SegmentedPath>;
     private currentSession: Session | null;
     private isLiveMode: boolean;
+    private currentBaseLayer: string = 'osm';
+    private checkboxStates: Map<string, { marker: boolean; trace: boolean }> = new Map();
+    private isRestoringStates = false;
 
     constructor(private mapId: string) {
-        this.layers = {};
         this.markers = new Map();
         this.paths = new Map();
         this.currentSession = null;
         this.isLiveMode = true;
-
         this.init();
     }
 
@@ -385,47 +389,77 @@ export class MapService {
 
         this.initializeMap();
         this.setupEventListeners();
-        
+
         console.log('MapService initialized');
     }
 
     private initializeMap(): void {
-        const map_config = {
-            lat: 56.4520,
-            lon: 84.9615,
-            zoom: 13
-        };
+        // ВОССТАНАВЛИВАЕМ СОХРАНЕННЫЕ НАСТРОЙКИ КАРТЫ
+        const mapSettings = window.mainApp?.getMapSettings?.();
+        const center = mapSettings?.center || { lat: 56.452, lon: 84.9615 };
+        const zoom = mapSettings?.zoom || 13;
+        this.currentBaseLayer = mapSettings?.baseLayer || 'osm';
 
-        this.map = (L as any).map(this.mapId).setView(
-            [map_config.lat, map_config.lon],
-            map_config.zoom
-        );
+        this.map = (L as any).map(this.mapId).setView([center.lat, center.lon], zoom);
 
+        // Создаем слои
         this.osmLayer = (L as any).tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap contributors',
-            maxZoom: 19
-        }).addTo(this.map);
-
-        this.GoogleSatteliteLayer = (L as any).tileLayer('https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga', {
-            attribution: '© GoogleSattelite',
-            maxZoom: 19
+            maxZoom: 19,
         });
 
+        this.GoogleSatteliteLayer = (L as any).tileLayer(
+            'https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga',
+            {
+                attribution: '© GoogleSattelite',
+                maxZoom: 19,
+            }
+        );
+
         this.baseLayers = {
-            "OpenStreetMap": this.osmLayer,
-            "GoogleSattelite": this.GoogleSatteliteLayer
+            OpenStreetMap: this.osmLayer,
+            GoogleSattelite: this.GoogleSatteliteLayer,
         };
+
+        // АКТИВИРУЕМ СОХРАНЕННЫЙ СЛОЙ
+        const activeLayer = this.currentBaseLayer === 'google-satellite' ? this.GoogleSatteliteLayer : this.osmLayer;
+        activeLayer.addTo(this.map);
+
         (L as any).control.layers(this.baseLayers).addTo(this.map);
+
+        // СЛУШАЕМ ИЗМЕНЕНИЯ КАРТЫ ДЛЯ СОХРАНЕНИЯ
+        this.map.on('moveend', this.saveMapState.bind(this));
+        this.map.on('zoomend', this.saveMapState.bind(this));
+        this.map.on('baselayerchange', this.onBaseLayerChange.bind(this));
+    }
+
+    private onBaseLayerChange(e: any): void {
+        // СОХРАНЯЕМ ВЫБРАННЫЙ СЛОЙ
+        const layerName = e.name;
+        this.currentBaseLayer = layerName === 'GoogleSattelite' ? 'google-satellite' : 'osm';
+
+        window.mainApp?.setMapBaseLayer?.(this.currentBaseLayer);
+        console.log(`Base layer changed to: ${this.currentBaseLayer}`);
+    }
+
+    private saveMapState(): void {
+        if (!this.map) return;
+
+        const center = this.map.getCenter();
+        const zoom = this.map.getZoom();
+
+        // СОХРАНЯЕМ ПОЗИЦИЮ И ЗУМ
+        window.mainApp?.setMapSettings?.(zoom, { lat: center.lat, lon: center.lng }, this.currentBaseLayer);
     }
 
     private setupEventListeners(): void {
-        eventBus.on(EventTypes.TABLE.CHECKBOX_MARKER, (data: any) => {
-            this.setMarkerVisible(data.id_module, data.flag);
-        });
+        // eventBus.on(EventTypes.TABLE.CHECKBOX_MARKER, (data: any) => {
+        //     this.setMarkerVisible(data.id_module, data.flag);
+        // });
 
-        eventBus.on(EventTypes.TABLE.CHECKBOX_TRACE, (data: any) => {
-            this.setTraceVisible(data.id_module, data.flag);
-        });
+        // eventBus.on(EventTypes.TABLE.CHECKBOX_TRACE, (data: any) => {
+        //     this.setTraceVisible(data.id_module, data.flag);
+        // });
 
         eventBus.on(EventTypes.SOCKET.NEW_DATA_MODULE, (data: any) => {
             if (!data?.points) return;
@@ -462,21 +496,70 @@ export class MapService {
             });
         });
 
-        eventBus.on(EventTypes.SESSION.LOAD_DATA, (sessionData: any) => {
-            console.log("MapService: Event LOAD_DATA", sessionData.map);
-            this.setPosition(sessionData.map);
+        // eventBus.on(EventTypes.SESSION.LOAD_DATA, (sessionData: any) => {
+        //     console.log('MapService: Event LOAD_DATA', sessionData.map);
+        //     this.setPosition(sessionData.map);
 
-            sessionData.modules.forEach((data: ModuleData) => {
-                this.addOrUpdateMarker(data);
-            });
-        });
+        //     // ВОССТАНАВЛИВАЕМ СОСТОЯНИЯ ЧЕКБОКСОВ ДЛЯ КАЖДОГО МОДУЛЯ
+        //     sessionData.modules.forEach((data: ModuleData) => {
+        //         this.addOrUpdateMarker(data);
+        //         this.restoreCheckboxStates(data.id_module);
+        //     });
+        // });
 
-        eventBus.on(EventTypes.SESSION.SELECTED, (session: Session) => {
-            if (this.currentSession && this.currentSession.id !== session.id) {
-                this.clearMap();
+        // eventBus.on(EventTypes.SESSION.SELECTED, (session: Session) => {
+        //     console.log('🗺️ MapService: Session changed', session);
+
+        //     const previousSessionId = this.currentSession?.id;
+        //     this.currentSession = session;
+
+        //     // ОЧИЩАЕМ КАРТУ С ФЛАГОМ СМЕНЫ СЕССИИ
+        //     if (previousSessionId && previousSessionId !== session.id) {
+        //         this.clearMap(true); // true = session changed
+        //     }
+        // });
+    }
+
+    // НОВЫЙ МЕТОД: восстановление состояний чекбоксов для модуля
+    private restoreCheckboxStates(moduleId: string): void {
+        if (!this.currentSession || this.isRestoringStates) return;
+
+        try {
+            this.isRestoringStates = true; // 🎯 Блокируем повторные вызовы
+
+            // 🎯 ЕДИНОВРЕМЕННОЕ чтение состояния для модуля
+            const savedState = window.mainApp?.getCheckboxState?.(this.currentSession.id, moduleId);
+            const finalState = savedState || { marker: true, trace: false };
+
+            this.checkboxStates.set(moduleId, finalState);
+
+            // 🎯 ПРИМЕНЯЕМ СОСТОЯНИЯ БЕЗ ВЫЗОВА saveCheckboxState
+            this.applyCheckboxStateWithoutSaving(moduleId, finalState);
+
+            console.log(`🗺️ MapService: Restored states for ${moduleId}`, finalState);
+        } catch (error) {
+            console.warn(`MapService: Error restoring states for ${moduleId}`, error);
+        } finally {
+            this.isRestoringStates = false; // 🎯 Разблокируем
+        }
+    }
+
+    // 🎯 НОВЫЙ МЕТОД: Применение состояний без сохранения
+    private applyCheckboxStateWithoutSaving(moduleId: string, state: { marker: boolean; trace: boolean }): void {
+        const path = this.paths.get(moduleId);
+        if (path) {
+            path.setMarkerVisible(state.marker);
+            path.setTraceVisible(state.trace);
+        } else {
+            const mainMarker = this.markers.get(moduleId);
+            if (mainMarker) {
+                if (state.marker && !this.map.hasLayer(mainMarker)) {
+                    mainMarker.addTo(this.map);
+                } else if (!state.marker && this.map.hasLayer(mainMarker)) {
+                    this.map.removeLayer(mainMarker);
+                }
             }
-            this.currentSession = session;
-        });
+        }
     }
 
     public addOrUpdateMarker(data: ModuleData): void {
@@ -495,10 +578,12 @@ export class MapService {
                 marker.setPopupContent(data.module_name || data.id_module);
                 marker.setIcon(this.createCustomIcon(data.module_color || '#FF0000'));
             } else {
-                console.log("MapService: Create marker", data.id_module);
-                marker = (L as any).marker(latlng, {
-                    icon: this.createCustomIcon(data.module_color || '#FF0000')
-                }).bindPopup(data.module_name || data.id_module);
+                console.log('MapService: Create marker', data.id_module);
+                marker = (L as any)
+                    .marker(latlng, {
+                        icon: this.createCustomIcon(data.module_color || '#FF0000'),
+                    })
+                    .bindPopup(data.module_name || data.id_module);
 
                 marker.addTo(this.map);
                 this.markers.set(data.id_module, marker);
@@ -532,9 +617,12 @@ export class MapService {
                 }
             }
         }
+
+        // СОХРАНЯЕМ СОСТОЯНИЕ
+        this.saveCheckboxState(id_module, 'marker', flag);
     }
 
-    public clearMap(): void {
+    public clearMap(sessionChanged: boolean = false): void {
         this.markers.forEach((marker, id_module) => {
             this.map.removeLayer(marker);
         });
@@ -545,7 +633,12 @@ export class MapService {
         });
         this.paths.clear();
 
-        console.log("MapService: Map cleared");
+        if (sessionChanged) {
+            // ПРИ СМЕНЕ СЕССИИ ОЧИЩАЕМ КЭШ СОСТОЯНИЙ
+            this.checkboxStates.clear();
+        }
+
+        console.log('MapService: Map cleared', { sessionChanged });
     }
 
     public async setTraceVisible(id_module: string, flag: boolean): Promise<void> {
@@ -558,13 +651,43 @@ export class MapService {
             path.setTraceVisible(flag);
         }
 
+        // СОХРАНЯЕМ СОСТОЯНИЕ
+        this.saveCheckboxState(id_module, 'trace', flag);
+
         await this.setTimeRange();
+    }
+
+    // НОВЫЙ МЕТОД: сохранение состояния чекбокса
+    private saveCheckboxState(moduleId: string, type: 'marker' | 'trace', checked: boolean): void {
+        if (!this.currentSession || this.isRestoringStates) return;
+
+        try {
+            // 🎯 ОБНОВЛЯЕМ ЛОКАЛЬНЫЙ КЭШ
+            const currentState = this.checkboxStates.get(moduleId) || { marker: true, trace: false };
+
+            // 🎯 ПРОВЕРЯЕМ, ДЕЙСТВИТЕЛЬНО ЛИ ИЗМЕНИЛОСЬ СОСТОЯНИЕ
+            if (currentState[type] === checked) {
+                return; // 🎯 Не сохраняем если состояние не изменилось
+            }
+
+            currentState[type] = checked;
+            this.checkboxStates.set(moduleId, currentState);
+
+            // 🎯 СОХРАНЯЕМ В ГЛОБАЛЬНОЕ ХРАНИЛИЩЕ
+            window.mainApp?.setCheckboxState?.(this.currentSession.id, moduleId, type, checked);
+
+            console.log(`🗺️ MapService: Saved ${type} state for ${moduleId}`, checked);
+        } catch (error) {
+            console.warn(`MapService: Error saving ${type} state for ${moduleId}`, error);
+        }
     }
 
     private async loadAndCreateTrace(id_module: string): Promise<void> {
         try {
+            console.log(`🗺️ MapService: Loading trace for ${id_module}, session: ${this.currentSession?.id}`);
             const response = await this.getTraceModule(id_module, this.currentSession!.id, 0);
             this.createOrUpdateTrace(response);
+            console.log(`🗺️ MapService: Trace loaded for ${id_module}`);
         } catch (error) {
             console.error('MapService: Error when uploading a track:', error);
         }
@@ -578,7 +701,7 @@ export class MapService {
             </svg>`,
             iconSize: [48, 48],
             iconAnchor: [24, 48],
-            popupAnchor: [0, -48]
+            popupAnchor: [0, -48],
         });
     }
 
@@ -587,13 +710,13 @@ export class MapService {
 
         let path = this.paths.get(data.id_module);
 
-        const coords = Array.isArray(data.coords[0]) &&
-            (typeof data.coords[0][0] === 'number' || Array.isArray(data.coords[0][0]))
-            ? data.coords
-            : [data.coords];
+        const coords =
+            Array.isArray(data.coords[0]) && (typeof data.coords[0][0] === 'number' || Array.isArray(data.coords[0][0]))
+                ? data.coords
+                : [data.coords];
 
         if (!path) {
-            console.log("MapService: Create Trace for marker", data.id_module);
+            console.log('MapService: Create Trace for marker', data.id_module);
             path = new SegmentedPath(this.map, data.module_color || '#FF0000');
             path.isLiveMode = this.isLiveMode;
             path.setLatLngs(coords, data.timestamps);
@@ -603,7 +726,7 @@ export class MapService {
         } else {
             path.setLatLngs(coords, data.timestamps);
             path.setStyle({
-                color: data.module_color || '#FF0000'
+                color: data.module_color || '#FF0000',
             });
         }
     }

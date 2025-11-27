@@ -35,11 +35,11 @@ export class TimeRangeSlider {
 
     private init(): void {
         console.log('TimeRangeSlider initializing...');
-        
+
         this.bindEvents();
         this.setupEventListeners();
         this.updateDisplay();
-        
+
         console.log('TimeRangeSlider initialized');
     }
 
@@ -97,7 +97,7 @@ export class TimeRangeSlider {
 
     private handleToggleChange(): void {
         const isChecked = this.toggleCheckbox.checked;
-        
+
         if (isChecked) {
             this.show();
         } else {
@@ -127,7 +127,7 @@ export class TimeRangeSlider {
     private stopPlayback(): void {
         this.isPlaying = false;
         this.updatePlayButton();
-        
+
         if (this.animationFrameId) {
             cancelAnimationFrame(this.animationFrameId);
             this.animationFrameId = null;
@@ -142,7 +142,7 @@ export class TimeRangeSlider {
         (this as any).lastFrameTime = now;
 
         // Обновляем время с учетом скорости воспроизведения
-        this.currentTime += deltaTime * this.playbackSpeed * (this.maxTime - this.minTime) / 10;
+        this.currentTime += (deltaTime * this.playbackSpeed * (this.maxTime - this.minTime)) / 10;
 
         // Проверяем границы
         if (this.currentTime >= this.maxTime) {
@@ -163,10 +163,10 @@ export class TimeRangeSlider {
 
     private stepBackward(): void {
         this.stopPlayback();
-        
+
         const step = (this.maxTime - this.minTime) / 100;
         this.currentTime = Math.max(this.minTime, this.currentTime - step);
-        
+
         this.slider.value = this.currentTime.toString();
         this.updateDisplay();
         this.emitTimeChanged();
@@ -174,10 +174,10 @@ export class TimeRangeSlider {
 
     private stepForward(): void {
         this.stopPlayback();
-        
+
         const step = (this.maxTime - this.minTime) / 100;
         this.currentTime = Math.min(this.maxTime, this.currentTime + step);
-        
+
         this.slider.value = this.currentTime.toString();
         this.updateDisplay();
         this.emitTimeChanged();
@@ -186,18 +186,18 @@ export class TimeRangeSlider {
     public setTimeRange(min: number, max: number): void {
         this.minTime = min;
         this.maxTime = max;
-        
+
         // Обновляем слайдер
         this.slider.min = min.toString();
         this.slider.max = max.toString();
-        
+
         // Если текущее время вне нового диапазона, сбрасываем его
         if (this.currentTime < min) {
             this.currentTime = min;
         } else if (this.currentTime > max) {
             this.currentTime = max;
         }
-        
+
         this.slider.value = this.currentTime.toString();
         this.updateDisplay();
     }
@@ -269,7 +269,7 @@ export class TimeRangeSlider {
 
     public destroy(): void {
         this.stopPlayback();
-        
+
         // Удаляем обработчики событий
         this.slider.removeEventListener('input', this.handleSliderInput);
         this.slider.removeEventListener('change', this.handleSliderChange);
@@ -277,7 +277,7 @@ export class TimeRangeSlider {
         this.prevBtn.removeEventListener('click', this.stepBackward);
         this.nextBtn.removeEventListener('click', this.stepForward);
         this.toggleCheckbox.removeEventListener('change', this.handleToggleChange);
-        
+
         // Отписываемся от событий EventBus с правильной сигнатурой
         eventBus.off(EventTypes.ROUTE_SLIDER.TIME_RANGE_CHANGED, this.handleTimeRangeChanged.bind(this));
         eventBus.off(EventTypes.ROUTE_SLIDER.TIME_SLIDER_SET, this.handleTimeSliderSet.bind(this));

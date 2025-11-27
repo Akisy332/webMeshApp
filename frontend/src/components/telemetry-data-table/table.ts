@@ -11,7 +11,7 @@ export class FixedScrollbarVirtualizedTable {
     private scrollbarThumb: HTMLElement;
     private tableWrapper: HTMLElement;
     private tableContainerInner: HTMLElement;
-    
+
     private visibleRows: Set<HTMLElement> = new Set();
     private rowCache: Map<number, HTMLElement> = new Map();
     private data: any[] = [];
@@ -21,11 +21,11 @@ export class FixedScrollbarVirtualizedTable {
     private buffer: number;
     private cleanupThreshold: number;
     private preloadThreshold: number;
-    
+
     private isDragging: boolean = false;
     private startY: number = 0;
     private startScroll: number = 0;
-    
+
     private columnDefinitions: any[] = [];
     private visibleColumns: Set<string> = new Set();
     private currentSessionId: number | null = null;
@@ -45,7 +45,7 @@ export class FixedScrollbarVirtualizedTable {
             cleanupThreshold: 1000,
             preloadThreshold: 50,
             columns: [],
-            ...options
+            ...options,
         };
 
         this.rowHeight = this.options.rowHeight;
@@ -59,48 +59,48 @@ export class FixedScrollbarVirtualizedTable {
 
     private init(): void {
         console.log('FixedScrollbarVirtualizedTable initializing...');
-        
+
         this.createTableStructure();
         this.setupScrollbar();
         this.setupColumnDefinitions();
         this.setupEventListeners();
         this.loadInitialData();
-        
+
         console.log('FixedScrollbarVirtualizedTable initialized');
     }
 
     private createTableStructure(): void {
         this.container.innerHTML = '';
-        
+
         this.tableWrapper = document.createElement('div');
         this.tableWrapper.className = 'table-wrapper';
         this.tableWrapper.id = 'table-wrapper';
-        
+
         this.tableContainerInner = document.createElement('div');
         this.tableContainerInner.className = 'table-container-inner';
-        
+
         this.tableElement = document.createElement('table');
         this.tableElement.className = 'table table-striped table-hover virtualized-table';
-        
+
         this.thead = document.createElement('thead');
         this.tbody = document.createElement('tbody');
         this.tbody.className = 'virtualized-tbody';
-        
+
         this.tableElement.appendChild(this.thead);
         this.tableElement.appendChild(this.tbody);
         this.tableContainerInner.appendChild(this.tableElement);
-        
+
         this.scrollbar = document.createElement('div');
         this.scrollbar.className = 'virtual-scrollbar';
-        
+
         this.scrollbarThumb = document.createElement('div');
         this.scrollbarThumb.className = 'scrollbar-thumb';
-        
+
         this.scrollbar.appendChild(this.scrollbarThumb);
         this.tableWrapper.appendChild(this.tableContainerInner);
         this.tableWrapper.appendChild(this.scrollbar);
         this.container.appendChild(this.tableWrapper);
-        
+
         this.tableContainerInner.style.overflow = 'hidden';
         this.tbody.style.position = 'relative';
     }
@@ -122,49 +122,51 @@ export class FixedScrollbarVirtualizedTable {
                 { key: 'source', title: 'Источник', visible: false, width: '100px', sortable: true },
                 { key: 'jumps', title: 'Прыжки', visible: false, width: '80px', sortable: true },
                 { key: 'id_session', title: 'Сессия', visible: false, width: '100px', sortable: true },
-                { key: 'id_module', title: 'ID Модуля', visible: false, width: '120px', sortable: true }
+                { key: 'id_module', title: 'ID Модуля', visible: false, width: '120px', sortable: true },
             ];
         }
-        
-        this.columnDefinitions.forEach(col => {
+
+        this.columnDefinitions.forEach((col) => {
             if (col.visible) {
                 this.visibleColumns.add(col.key);
             }
         });
-        
+
         this.renderTableHeader();
     }
 
     private renderTableHeader(): void {
         this.thead.innerHTML = '';
         const headerRow = document.createElement('tr');
-        
-        this.columnDefinitions.forEach(column => {
+
+        this.columnDefinitions.forEach((column) => {
             if (this.visibleColumns.has(column.key)) {
                 const th = document.createElement('th');
                 th.textContent = column.title;
                 th.style.width = column.width;
                 th.style.minWidth = column.width;
                 th.style.maxWidth = column.width;
-                
+
                 if (column.sortable !== false) {
                     th.style.cursor = 'pointer';
                     th.classList.add('sortable');
-                    
+
                     if (this.sortField === column.key) {
                         th.classList.add('sorting', this.sortDirection);
-                        th.innerHTML = `${column.title} <span class="sort-indicator">${this.sortDirection === 'asc' ? '↑' : '↓'}</span>`;
+                        th.innerHTML = `${column.title} <span class="sort-indicator">${
+                            this.sortDirection === 'asc' ? '↑' : '↓'
+                        }</span>`;
                     }
-                    
+
                     th.addEventListener('click', () => {
                         this.sortData(column.key);
                     });
                 }
-                
+
                 headerRow.appendChild(th);
             }
         });
-        
+
         this.thead.appendChild(headerRow);
     }
 
@@ -209,16 +211,19 @@ export class FixedScrollbarVirtualizedTable {
 
     private handleScrollbarDrag(event: MouseEvent): void {
         if (!this.isDragging) return;
-        
+
         const deltaY = event.clientY - this.startY;
         const scrollbarHeight = this.scrollbar.offsetHeight;
         const thumbHeight = this.scrollbarThumb.offsetHeight;
         const maxScroll = Math.max(1, scrollbarHeight - thumbHeight);
-        
+
         const scrollRatio = deltaY / maxScroll;
-        const totalScrollableHeight = Math.max(1, this.totalCount * this.rowHeight - this.tableContainerInner.offsetHeight);
+        const totalScrollableHeight = Math.max(
+            1,
+            this.totalCount * this.rowHeight - this.tableContainerInner.offsetHeight
+        );
         const newScroll = this.startScroll + scrollRatio * totalScrollableHeight;
-        
+
         this.scrollTo(newScroll);
     }
 
@@ -279,9 +284,8 @@ export class FixedScrollbarVirtualizedTable {
     }
 
     private updateOrAddRow(moduleData: any): void {
-        const existingIndex = this.data.findIndex(row => 
-            row.id_module === moduleData.id_module && 
-            row.datetime_unix === moduleData.datetime_unix
+        const existingIndex = this.data.findIndex(
+            (row) => row.id_module === moduleData.id_module && row.datetime_unix === moduleData.datetime_unix
         );
 
         if (existingIndex !== -1) {
@@ -305,8 +309,8 @@ export class FixedScrollbarVirtualizedTable {
             newCache.set(index + 1, row);
         });
         this.rowCache = newCache;
-        
-        this.visibleRows.forEach(row => {
+
+        this.visibleRows.forEach((row) => {
             const oldIndex = parseInt((row as any).dataset.index || '0');
             (row as any).dataset.index = (oldIndex + 1).toString();
         });
@@ -316,7 +320,7 @@ export class FixedScrollbarVirtualizedTable {
         try {
             const url = this.buildApiUrl(0);
             const response = await fetch(url);
-            
+
             if (response.ok) {
                 const result = await response.json();
                 this.handleDataResponse(result);
@@ -334,14 +338,14 @@ export class FixedScrollbarVirtualizedTable {
             try {
                 const url = this.buildApiUrl(offset);
                 const response = await fetch(url);
-                
+
                 if (response.ok) {
                     const result = await response.json();
                     const newData = result.data || result.rows || [];
-                    
+
                     this.data.push(...newData);
                     this.totalCount = result.totalCount || result.total || this.data.length;
-                    
+
                     this.updateScrollbarSize();
                     this.renderVisibleRows(false);
                 }
@@ -354,7 +358,7 @@ export class FixedScrollbarVirtualizedTable {
     private buildApiUrl(offset: number): string {
         const params = new URLSearchParams({
             limit: this.options.limit.toString(),
-            offset: offset.toString()
+            offset: offset.toString(),
         });
 
         if (this.currentSessionId) {
@@ -378,7 +382,7 @@ export class FixedScrollbarVirtualizedTable {
     private handleDataResponse(result: any): void {
         this.data = result.data || result.rows || [];
         this.totalCount = result.totalCount || result.total || this.data.length;
-        
+
         this.updateScrollbarSize();
         this.renderVisibleRows(true);
     }
@@ -387,7 +391,7 @@ export class FixedScrollbarVirtualizedTable {
         this.data = [];
         const modules = ['Module A', 'Module B', 'Module C', 'Module D'];
         const colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00'];
-        
+
         for (let i = 1; i <= 1000; i++) {
             const moduleIndex = i % modules.length;
             this.data.push({
@@ -405,7 +409,7 @@ export class FixedScrollbarVirtualizedTable {
                 source: 'gateway_' + (i % 3),
                 jumps: i % 5,
                 id_session: this.currentSessionId || 1,
-                id_module: `module_${moduleIndex + 1}`
+                id_module: `module_${moduleIndex + 1}`,
             });
         }
         this.totalCount = this.data.length;
@@ -421,14 +425,14 @@ export class FixedScrollbarVirtualizedTable {
     public scrollTo(offset: number): void {
         const maxOffset = Math.max(0, this.totalCount * this.rowHeight - this.tableContainerInner.offsetHeight);
         this.currentOffset = Math.max(0, Math.min(maxOffset, offset));
-        
+
         this.updateScrollbarPosition();
         this.renderVisibleRows(false);
         this.preloadDataIfNeeded();
     }
 
     public scrollToId(id: number): boolean {
-        const rowIndex = this.data.findIndex(row => row.id === id);
+        const rowIndex = this.data.findIndex((row) => row.id === id);
         if (rowIndex !== -1) {
             const targetOffset = rowIndex * this.rowHeight;
             this.scrollTo(targetOffset);
@@ -439,19 +443,19 @@ export class FixedScrollbarVirtualizedTable {
     }
 
     private highlightRow(index: number): void {
-        this.visibleRows.forEach(row => {
+        this.visibleRows.forEach((row) => {
             row.classList.remove('highlighted');
         });
-        
+
         const rowElement = this.rowCache.get(index);
         if (rowElement) {
             rowElement.classList.add('highlighted');
-            
+
             const rowTop = index * this.rowHeight;
             const rowBottom = rowTop + this.rowHeight;
             const containerTop = this.currentOffset;
             const containerBottom = containerTop + this.tableContainerInner.offsetHeight;
-            
+
             if (rowTop < containerTop) {
                 this.scrollTo(rowTop - 10);
             } else if (rowBottom > containerBottom) {
@@ -462,16 +466,18 @@ export class FixedScrollbarVirtualizedTable {
 
     public async navigateToValue(field: string, value: string): Promise<boolean> {
         try {
-            const foundIndex = this.data.findIndex(row => {
+            const foundIndex = this.data.findIndex((row) => {
                 const fieldValue = row[field];
                 return fieldValue && fieldValue.toString().toLowerCase().includes(value.toLowerCase());
             });
-            
+
             if (foundIndex !== -1) {
                 return this.scrollToId(this.data[foundIndex].id);
             }
-            
-            const response = await fetch(`${this.options.apiUrl}/search?field=${field}&value=${value}&session_id=${this.currentSessionId || ''}`);
+
+            const response = await fetch(
+                `${this.options.apiUrl}/search?field=${field}&value=${value}&session_id=${this.currentSessionId || ''}`
+            );
             if (response.ok) {
                 const result = await response.json();
                 if (result.data && result.data.length > 0) {
@@ -488,36 +494,36 @@ export class FixedScrollbarVirtualizedTable {
         const containerHeight = this.tableContainerInner.offsetHeight;
         const startIndex = Math.floor(this.currentOffset / this.rowHeight);
         const visibleCount = Math.ceil(containerHeight / this.rowHeight);
-        
+
         const start = Math.max(0, startIndex - this.buffer);
         const end = Math.min(this.totalCount, startIndex + visibleCount + this.buffer);
-        
+
         if (forceCleanup || this.rowCache.size > this.cleanupThreshold) {
             this.cleanupRowCache(start, end);
         }
-        
+
         this.removeInvisibleRows(start, end);
-        
+
         for (let i = start; i < end; i++) {
             this.renderRow(i);
         }
-        
+
         this.updateTbodyHeight();
     }
 
     private renderRow(index: number): void {
         let rowElement = this.rowCache.get(index);
-        
+
         if (!rowElement) {
             rowElement = this.createRowElement(index);
             this.rowCache.set(index, rowElement);
             this.visibleRows.add(rowElement);
         }
-        
+
         if (!rowElement.parentElement) {
             this.tbody.appendChild(rowElement);
         }
-        
+
         this.updateRowData(rowElement, index);
     }
 
@@ -529,8 +535,8 @@ export class FixedScrollbarVirtualizedTable {
         row.style.left = '0';
         row.style.right = '0';
         (row as any).dataset.index = index.toString();
-        
-        this.columnDefinitions.forEach(column => {
+
+        this.columnDefinitions.forEach((column) => {
             if (this.visibleColumns.has(column.key)) {
                 const cell = document.createElement('td');
                 cell.style.width = column.width;
@@ -542,7 +548,7 @@ export class FixedScrollbarVirtualizedTable {
                 row.appendChild(cell);
             }
         });
-        
+
         return row;
     }
 
@@ -552,19 +558,21 @@ export class FixedScrollbarVirtualizedTable {
             this.loadMoreData(index);
             return;
         }
-        
+
         const cells = row.querySelectorAll('td');
         let cellIndex = 0;
-        
-        this.columnDefinitions.forEach(column => {
+
+        this.columnDefinitions.forEach((column) => {
             if (this.visibleColumns.has(column.key)) {
                 if (cells[cellIndex]) {
                     const cell = cells[cellIndex] as HTMLElement;
-                    
+
                     let displayValue = rowData[column.key];
-                    
+
                     if (column.key === 'module_color') {
-                        cell.innerHTML = `<div style="width: 20px; height: 20px; background-color: ${displayValue || '#CCCCCC'}; border-radius: 3px; border: 1px solid #666;" title="${displayValue || ''}"></div>`;
+                        cell.innerHTML = `<div style="width: 20px; height: 20px; background-color: ${
+                            displayValue || '#CCCCCC'
+                        }; border-radius: 3px; border: 1px solid #666;" title="${displayValue || ''}"></div>`;
                     } else if (column.key === 'gps_ok') {
                         displayValue = displayValue ? '✅' : '❌';
                         cell.textContent = displayValue;
@@ -582,18 +590,18 @@ export class FixedScrollbarVirtualizedTable {
                     } else {
                         cell.textContent = displayValue || 'N/A';
                     }
-                    
+
                     cell.title = displayValue || '';
                 }
                 cellIndex++;
             }
         });
-        
+
         row.style.top = `${index * this.rowHeight}px`;
     }
 
     private removeInvisibleRows(start: number, end: number): void {
-        this.visibleRows.forEach(row => {
+        this.visibleRows.forEach((row) => {
             const rowIndex = parseInt((row as any).dataset.index || '-1');
             if (rowIndex < start || rowIndex >= end) {
                 row.remove();
@@ -606,7 +614,7 @@ export class FixedScrollbarVirtualizedTable {
         const cleanupBuffer = this.buffer * 3;
         const keepStart = Math.max(0, currentStart - cleanupBuffer);
         const keepEnd = Math.min(this.totalCount, currentEnd + cleanupBuffer);
-        
+
         this.rowCache.forEach((row, index) => {
             if (index < keepStart || index >= keepEnd) {
                 if (this.visibleRows.has(row)) {
@@ -625,7 +633,7 @@ export class FixedScrollbarVirtualizedTable {
     public updateScrollbarSize(): void {
         const containerHeight = this.tableContainerInner.offsetHeight;
         const totalHeight = this.totalCount * this.rowHeight;
-        
+
         if (totalHeight > containerHeight) {
             const thumbHeight = Math.max(20, (containerHeight / totalHeight) * containerHeight);
             this.scrollbarThumb.style.height = `${thumbHeight}px`;
@@ -640,7 +648,7 @@ export class FixedScrollbarVirtualizedTable {
         const totalHeight = this.totalCount * this.rowHeight;
         const thumbHeight = this.scrollbarThumb.offsetHeight;
         const maxScroll = containerHeight - thumbHeight;
-        
+
         if (maxScroll > 0) {
             const scrollRatio = this.currentOffset / (totalHeight - containerHeight);
             const thumbPosition = scrollRatio * maxScroll;
@@ -652,7 +660,7 @@ export class FixedScrollbarVirtualizedTable {
 
     private preloadDataIfNeeded(): void {
         const currentEnd = Math.floor((this.currentOffset + this.tableContainerInner.offsetHeight) / this.rowHeight);
-        
+
         if (this.totalCount - currentEnd < this.preloadThreshold) {
             const nextOffset = Math.floor(this.data.length / this.options.limit) * this.options.limit;
             if (nextOffset < this.totalCount) {
@@ -679,7 +687,7 @@ export class FixedScrollbarVirtualizedTable {
         } else {
             this.visibleColumns.delete(columnKey);
         }
-        
+
         this.renderTableHeader();
         this.clearRowCache();
         this.renderVisibleRows(true);
@@ -687,19 +695,19 @@ export class FixedScrollbarVirtualizedTable {
 
     public resetColumns(): void {
         this.visibleColumns.clear();
-        this.columnDefinitions.forEach(col => {
+        this.columnDefinitions.forEach((col) => {
             if (col.visible) {
                 this.visibleColumns.add(col.key);
             }
         });
-        
+
         this.renderTableHeader();
         this.clearRowCache();
         this.renderVisibleRows(true);
     }
 
     private clearRowCache(): void {
-        this.visibleRows.forEach(row => row.remove());
+        this.visibleRows.forEach((row) => row.remove());
         this.visibleRows.clear();
         this.rowCache.clear();
     }
@@ -711,18 +719,18 @@ export class FixedScrollbarVirtualizedTable {
             this.sortField = field;
             this.sortDirection = 'asc';
         }
-        
+
         this.data.sort((a, b) => {
             const aVal = a[field];
             const bVal = b[field];
-            
+
             let result = 0;
             if (aVal < bVal) result = -1;
             if (aVal > bVal) result = 1;
-            
+
             return this.sortDirection === 'desc' ? -result : result;
         });
-        
+
         this.renderTableHeader();
         this.clearRowCache();
         this.renderVisibleRows(true);
@@ -744,7 +752,7 @@ export class FixedScrollbarVirtualizedTable {
 
     public getColumnState(): { [key: string]: boolean } {
         const state: { [key: string]: boolean } = {};
-        this.columnDefinitions.forEach(col => {
+        this.columnDefinitions.forEach((col) => {
             state[col.key] = this.visibleColumns.has(col.key);
         });
         return state;
@@ -754,7 +762,7 @@ export class FixedScrollbarVirtualizedTable {
         this.data = newData;
         this.totalCount = totalCount || newData.length;
         this.currentOffset = 0;
-        
+
         this.clearRowCache();
         this.updateScrollbarSize();
         this.renderVisibleRows(true);
@@ -765,21 +773,21 @@ export class FixedScrollbarVirtualizedTable {
         const visibleCount = Math.ceil(this.tableContainerInner.offsetHeight / this.rowHeight);
         return {
             start: startIndex,
-            end: startIndex + visibleCount
+            end: startIndex + visibleCount,
         };
     }
 
     public exportToCSV(): void {
         const headers = this.columnDefinitions
-            .filter(col => this.visibleColumns.has(col.key))
-            .map(col => col.title);
-        
+            .filter((col) => this.visibleColumns.has(col.key))
+            .map((col) => col.title);
+
         const csvData = [
             headers.join(','),
-            ...this.data.map(row => 
+            ...this.data.map((row) =>
                 this.columnDefinitions
-                    .filter(col => this.visibleColumns.has(col.key))
-                    .map(col => {
+                    .filter((col) => this.visibleColumns.has(col.key))
+                    .map((col) => {
                         let value = row[col.key] || '';
                         if (col.key === 'gps_ok') {
                             value = value ? 'OK' : 'ERROR';
@@ -787,9 +795,9 @@ export class FixedScrollbarVirtualizedTable {
                         return `"${value.toString().replace(/"/g, '""')}"`;
                     })
                     .join(',')
-            )
+            ),
         ].join('\n');
-        
+
         const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -802,19 +810,19 @@ export class FixedScrollbarVirtualizedTable {
     }
 
     public getStats(): any {
-        const modules = new Set(this.data.map(row => row.module_name).filter(Boolean));
-        const sessions = new Set(this.data.map(row => row.id_session).filter(Boolean));
-        const gpsOkCount = this.data.filter(row => row.gps_ok).length;
-        
+        const modules = new Set(this.data.map((row) => row.module_name).filter(Boolean));
+        const sessions = new Set(this.data.map((row) => row.id_session).filter(Boolean));
+        const gpsOkCount = this.data.filter((row) => row.gps_ok).length;
+
         return {
             totalRecords: this.totalCount,
             uniqueModules: modules.size,
             uniqueSessions: sessions.size,
             gpsAccuracy: this.totalCount > 0 ? Math.round((gpsOkCount / this.totalCount) * 100) : 0,
             dateRange: {
-                min: this.data.length > 0 ? Math.min(...this.data.map(row => row.datetime_unix).filter(Boolean)) : 0,
-                max: this.data.length > 0 ? Math.max(...this.data.map(row => row.datetime_unix).filter(Boolean)) : 0
-            }
+                min: this.data.length > 0 ? Math.min(...this.data.map((row) => row.datetime_unix).filter(Boolean)) : 0,
+                max: this.data.length > 0 ? Math.max(...this.data.map((row) => row.datetime_unix).filter(Boolean)) : 0,
+            },
         };
     }
 
@@ -825,11 +833,11 @@ export class FixedScrollbarVirtualizedTable {
         this.tableContainerInner.removeEventListener('wheel', this.handleWheel);
         window.removeEventListener('resize', this.handleResize);
         document.removeEventListener('keydown', this.handleKeyDown);
-        
+
         // eventBus.off(EventTypes.SESSION.SELECTED);
         // eventBus.off(EventTypes.SESSION.LOAD_DATA);
         // eventBus.off(EventTypes.SOCKET.NEW_DATA_MODULE);
-        
+
         this.clearRowCache();
         this.container.innerHTML = '';
     }

@@ -13,12 +13,15 @@ RUN apt-get update && apt-get install -y \
 # Копирование исходного кода
 COPY frontend/ .
 
+# Копируем общие модули
+COPY shared/ ./shared/
+
 # Установка TypeScript
 RUN npm install -g typescript
 RUN npm install
 
 # Сборка TypeScript
-RUN npm run build
+RUN npm run build && npm run copy-css
 
 # Установка Python зависимостей
 COPY frontend/requirements.txt .

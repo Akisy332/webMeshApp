@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run bundle && npm run copy-css",
     "build:watch": "tsc --watch",
     "build:prod": "tsc && npm run bundle",
-    "bundle": "esbuild app/static/dist/main.js --bundle --outfile=app/static/dist/bundle.js --format=esm",
-    "dev": "tsc && python run.py"
+    "bundle": "esbuild src/main.ts --bundle --outfile=app/static/dist/bundle.js --format=esm --platform=browser",
+    "copy-css": "mkdir -p app/static/components && cp -r src/components/. app/static/components/",
+    "dev": "tsc && npm run copy-css && python run.py"
   },
   "devDependencies": {
     "typescript": "^5.3.3",

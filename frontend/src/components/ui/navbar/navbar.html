@@ -1,0 +1,99 @@
+{% macro navbar(user=None) %}
+<nav class="navbar">
+    <div class="nav-brand">
+        <a href="/" class="brand-link">
+            <span class="brand-icon"></span>
+            WebMeshApp
+        </a>
+    </div>
+
+    <div class="nav-links">
+        <a href="/" class="nav-link" data-page="home">
+            <span class="nav-icon"></span>
+            Главная
+        </a>
+        <a href="/table" class="nav-link" data-page="table">
+            <span class="nav-icon"></span>
+            Таблица данных
+        </a>
+        
+        {% if user and user.authenticated and user.role in ['admin', 'developer'] %}
+        <a href="/admin" class="nav-link" data-page="admin">
+            <span class="nav-icon"></span>
+            Администрирование
+        </a>
+        {% endif %}
+    </div>
+
+    <div class="nav-auth">
+        {% if user and user.authenticated %}
+            <!-- Авторизованное состояние -->
+            <div class="auth-section authenticated">
+                <div class="user-menu">
+                    <div class="user-info">
+                        <span class="user-greeting">Привет, </span>
+                        <span class="username">{{ user.username }}</span>
+                        {% if user.role in ['admin', 'developer', 'curator'] %}
+                            <span class="user-role-badge user-role-badge--{{ user.role }}">
+                                {{ user.role|upper }}
+                            </span>
+                        {% endif %}
+                    </div>
+                    <div class="user-dropdown">
+                        <button class="user-btn">
+                            <div class="user-avatar">
+                                <span class="avatar-icon"></span>
+                            </div>
+                            <span class="dropdown-arrow">▼</span>
+                        </button>
+                        <div class="dropdown-menu">
+                            <a href="#" class="dropdown-item profile-btn">
+                                <span class="item-icon"></span>
+                                Профиль
+                            </a>
+                            <a href="#" class="dropdown-item settings-btn">
+                                <span class="item-icon"></span>
+                                Настройки
+                            </a>
+
+                            {% if user.role in ['admin', 'developer'] %}
+                            <div class="admin-menu-items">
+                                <div class="dropdown-divider"></div>
+                                <a href="/admin" class="dropdown-item admin-btn">
+                                    <span class="item-icon"></span>
+                                    Админ-панель
+                                </a>
+                                <a href="#" class="dropdown-item system-btn">
+                                    <span class="item-icon"></span>
+                                    Система
+                                </a>
+                            </div>
+                            {% endif %}
+
+                            <div class="dropdown-divider"></div>
+                            <a href="#" class="dropdown-item logout-btn">
+                                <span class="item-icon"></span>
+                                Выйти
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <!-- Неавторизованное состояние -->
+            <div class="auth-section unauthenticated">
+                <div class="auth-buttons">
+                    <button class="btn btn-outline login-btn">
+                        <span class="btn-icon"></span>
+                        Войти
+                    </button>
+                    <button class="btn btn-primary register-btn">
+                        <span class="btn-icon"></span>
+                        Регистрация
+                    </button>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</nav>
+{% endmacro %}
