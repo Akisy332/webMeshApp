@@ -3,7 +3,7 @@ import { EventTypes } from './core/constants.js';
 import { settingsManager, SettingsSchema } from './core/settings-manager.js';
 import { SessionDataTableComponent } from './components/session-data-table/session-data-table-component.js';
 import { SessionService } from './services/session-service.js';
-import { MapService } from './services/map-service.js';
+import { MapService } from './features/map/index.js';
 import { AuthService } from './services/auth-service.js';
 import { LoginForm } from './components/auth/login-form.js';
 import { RegisterForm } from './components/auth/register-form.js';
@@ -116,8 +116,16 @@ class MainApp {
             this.sessionService = new SessionService();
             console.log('SessionService initialized');
 
-            this.mapService = new MapService('map');
-            console.log('MapService initialized');
+            this.mapService = new MapService(
+                {
+                    containerId: 'map',
+                    center: [56.452, 84.9615],
+                    zoom: 13,
+                    minZoom: 3,
+                    maxZoom: 18,
+                },
+                this.settingsManager
+            );
 
             // Инициализация компонентов аутентификации
             if (this.authService) {

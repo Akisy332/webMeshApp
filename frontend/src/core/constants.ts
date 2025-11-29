@@ -20,6 +20,11 @@ export const EventTypes = {
         SELECTED: 'session_selected',
         UPDATED: 'session_updated',
     },
+    MAP: {
+        MARKER_CLICK: 'map:marker_click',
+        MAP_CLICK: 'map:click',
+        ZOOM_CHANGED: 'map:zoom_changed',
+    },
 } as const;
 
 // Временные пороги в секундах
