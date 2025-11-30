@@ -128,7 +128,7 @@ export class TraceService {
         eventBus.on(EventTypes.TABLE.CHECKBOX_TRACE, (data: any) => {
             console.log('TraceService received checkbox event:', data);
             if (data?.id_module) {
-                this.setTraceVisibility(data.id_module, data.flag);
+                this.setTraceVisibility(data.id_module, data.checked);
             }
         });
 

@@ -203,3 +203,6 @@ combined_project.txt
 collect_project.py
 raw_data.txt
 redis_data/
+
+node_modules/
+package-lock.json

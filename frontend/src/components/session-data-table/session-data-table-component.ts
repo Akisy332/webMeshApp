@@ -1,295 +1,244 @@
-// session-data-table/session-data-table-component.ts
-import { BaseTableComponent } from '../base-table/base-table-component';
-import { TableConfig, TableColumn } from '../base-table/base-table-types';
+// frontend/src/components/session-data-table/session-data-table-component.ts
+import { GridApi, GridOptions, createGrid } from 'ag-grid-community';
 import { ModuleData } from '../../types/index.js';
 import { eventBus } from '../../core/event-bus.js';
 import { EventTypes } from '../../core/constants.js';
 import { ISettingsManager } from '../../core/types.js';
 
-export class SessionDataTableComponent extends BaseTableComponent<ModuleData> {
-    private settingsManager: ISettingsManager;
+interface GridModuleData extends ModuleData {
+    visible_marker: boolean;
+    visible_trace: boolean;
+    'coords.alt'?: number;
+}
 
-    private currentSessionId: number | null = null;
-    private timeUpdateInterval: number | null = null;
+// Компонент таблицы данных сессии - отображает модули и управляет видимостью на карте
+export class SessionDataTableComponent {
+    private gridApi!: GridApi; // API для управления таблицей
+    private settingsManager: ISettingsManager; // Хранилище настроек
+    private currentSessionId: number | null = null; // ID текущей сессии
+    private timeUpdateInterval: number | null = null; // Таймер обновления времени
 
+    // Инициализирует таблицу, подписывается на события, запускает таймеры
     constructor(containerId: string, settingsManager: ISettingsManager) {
-        const config: TableConfig = {
-            columns: SessionDataTableComponent.getTableColumns(),
-            features: {
-                infiniteScroll: false, // Пока отключим, добавим позже
-                rowSelection: false,
-                sorting: true,
-                filtering: false,
+        this.settingsManager = settingsManager;
+        this.initializeGrid(containerId);
+        this.setupEventListeners();
+        this.setupTimeUpdates();
+    }
+
+    // Создает AG Grid таблицу с колонками статуса, чекбоксов, времени
+    private initializeGrid(containerId: string): void {
+        const gridOptions: GridOptions = {
+            columnDefs: [
+                {
+                    field: 'status',
+                    headerName: 'Статус',
+                    width: 70,
+                    cellRenderer: this.statusCellRenderer.bind(this),
+                    comparator: this.statusComparator.bind(this),
+                },
+                {
+                    field: 'visible_marker',
+                    headerName: 'Маркер',
+                    width: 80,
+                    cellRenderer: this.checkboxCellRenderer.bind(this),
+                    cellRendererParams: { type: 'marker' },
+                },
+                {
+                    field: 'visible_trace',
+                    headerName: 'Трасса',
+                    width: 80,
+                    cellRenderer: this.checkboxCellRenderer.bind(this),
+                    cellRendererParams: { type: 'trace' },
+                },
+                {
+                    field: 'module_name',
+                    headerName: 'Модуль',
+                    width: 150,
+                    cellRenderer: this.moduleNameCellRenderer.bind(this),
+                },
+                {
+                    field: 'coords.alt',
+                    headerName: 'Высота',
+                    width: 100,
+                    comparator: (valueA: number, valueB: number) => {
+                        // Сортируем как числа
+                        return (valueA || 0) - (valueB || 0);
+                    },
+                    cellRenderer: (params: any) => {
+                        if (params.value === undefined || params.value === null) return '-';
+                        const altitude = Math.round(params.value);
+                        return `${altitude} м`;
+                    },
+                },
+                {
+                    field: 'datetime_unix',
+                    headerName: 'Время',
+                    width: 100,
+                    cellRenderer: this.timeCellRenderer.bind(this),
+                },
+            ],
+
+            getRowId: (params) => params.data.id_module,
+
+            accentedSort: false,
+            onGridReady: (params) => {
+                this.gridApi = params.api;
+                console.log('AG Grid ready');
             },
-            styles: {
-                striped: true,
-                hover: true,
-                compact: false,
-                bordered: false,
-                height: '100%',
-            },
-            classes: {
-                table: 'session-data-table',
-                header: 'session-data-header',
-                body: 'session-data-body',
-                row: 'session-data-row',
-                cell: 'session-data-cell',
-            },
+            onCellClicked: this.handleCellClick.bind(this),
         };
 
-        super(containerId, config);
-        this.settingsManager = settingsManager;
-
-        this.setupTimeUpdates();
-        this.setupEventListeners();
-        this.restoreTableState();
-    }
-
-    private restoreTableState(): void {
-        // Восстанавливаем только при наличии текущей сессии
-        if (this.currentSessionId) {
-            console.log('Restore checkboxes and sort');
-            // 1. Восстановление чекбоксов
-            const checkboxStates = this.settingsManager.getAllCheckboxStates(this.currentSessionId);
-            this.applyCheckboxStates(checkboxStates);
-
-            // 2. Восстановление сортировки
-            const sortSettings = this.settingsManager.getSortSettings();
-            if (sortSettings.field) {
-                this.setSort(sortSettings.field, sortSettings.direction);
-            }
+        const gridDiv = document.getElementById(containerId);
+        if (gridDiv) {
+            gridDiv.classList.add('ag-theme-alpine');
+            this.gridApi = createGrid(gridDiv, gridOptions);
         }
     }
 
-    private static getTableColumns(): TableColumn[] {
-        return [
-            {
-                key: 'status',
-                label: 'Статус',
-                sortable: false,
-                width: '60px',
-                cellRenderer: (value, rowData) => this.renderStatusCell(rowData),
-            },
-            {
-                key: 'visible_marker',
-                label: 'Маркер',
-                sortable: false,
-                width: '80px',
-                cellRenderer: (value, rowData) => this.renderCheckboxCell('marker', rowData),
-            },
-            {
-                key: 'visible_trace',
-                label: 'Трасса',
-                sortable: false,
-                width: '80px',
-                cellRenderer: (value, rowData) => this.renderCheckboxCell('trace', rowData),
-            },
-            {
-                key: 'module_name',
-                label: 'Модуль',
-                sortable: true,
-                width: '150px',
-                cellRenderer: (value, rowData) => this.renderModuleNameCell(rowData),
-            },
-            {
-                key: 'coords.alt',
-                label: 'Высота',
-                sortable: true,
-                width: '100px',
-                cellRenderer: (value, rowData) => this.renderAltitudeCell(rowData),
-            },
-            {
-                key: 'datetime_unix',
-                label: 'Время',
-                sortable: true,
-                width: '100px',
-                cellRenderer: (value, rowData) => this.renderTimeCell(rowData),
-            },
-        ];
+    // Отображает название модуля с цветным квадратом
+    private moduleNameCellRenderer(params: any): string {
+        const moduleData = params.data;
+        const moduleName = moduleData.module_name || 'Н/Д';
+        const moduleColor = moduleData.module_color || '#000000';
+
+        return `
+            <div class="module-name-cell" style="display: flex; align-items: center; gap: 8px;">
+                <div class="module-color-square" 
+                     style="width: 12px; height: 12px; background-color: ${moduleColor}; border: 1px solid #ccc; border-radius: 2px;">
+                </div>
+                <span class="module-name-text">${this.escapeHtml(moduleName)}</span>
+            </div>
+        `;
     }
 
-    protected bindEvents(): void {
-        super.bindEvents(); // 🔹 ВАЖНО: вызываем базовые обработчики
-
-        // Дополнительные специфичные обработчики для сессий
-        this.element.addEventListener('dblclick', this.handleRowDoubleClick.bind(this));
+    // Защита от XSS - экранирует HTML символы
+    private escapeHtml(unsafe: string): string {
+        return unsafe
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
-    // 🔹 АБСТРАКТНЫЕ МЕТОДЫ БАЗОВОГО КЛАССА
-    protected renderRow(moduleData: ModuleData, index: number): string {
-        // Базовый класс уже использует cellRenderer из колонок,
-        // но мы можем переопределить полный рендеринг строки если нужно
-        return this.config.columns
-            .map((column) =>
-                column.cellRenderer
-                    ? column.cellRenderer(this.getCellValue(moduleData, column.key), moduleData, column)
-                    : this.renderDefaultCell(moduleData, column)
-            )
-            .join('');
+    // Создает чекбоксы для управления видимостью маркеров и трасс
+    private checkboxCellRenderer(params: any): string {
+        const data = params.data;
+        const type = params.type || 'marker';
+        const checked = type === 'marker' ? data.visible_marker : data.visible_trace;
+        const moduleId = data.id_module;
+
+        return `
+            <div class="checkbox-container">
+                <input 
+                    type="checkbox" 
+                    ${checked ? 'checked' : ''}
+                    data-module-id="${moduleId}"
+                    data-type="${type}"
+                    class="module-checkbox"
+                />
+            </div>
+        `;
     }
 
-    protected getRowId(moduleData: ModuleData): string {
-        return moduleData.id_module;
+    // Форматирует время в "минуты:секунды" с момента получения данных
+    private timeCellRenderer(params: any): string {
+        const value = params.value;
+
+        const timestamp = value < 100000000000 ? value * 1000 : value;
+        const messageTime = new Date(timestamp);
+
+        if (isNaN(messageTime.getTime())) return 'Н/Д';
+
+        const now = new Date();
+        const elapsedSeconds = Math.floor((now.getTime() - messageTime.getTime()) / 1000);
+        const minutes = Math.floor(elapsedSeconds / 60);
+        const seconds = elapsedSeconds % 60;
+
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
 
-    // 🔹 ВИРТУАЛЬНЫЕ МЕТОДЫ - переопределяем обработчики
-    protected handleRowClick(moduleData: ModuleData, event: Event): void {
-        // Кастомная логика при клике на строку сессии
-        console.log('Session table row clicked:', moduleData.id_module);
-        eventBus.emit('session:module_selected', moduleData);
-
-        // Вызываем родительский обработчик
-        super.handleRowClick(moduleData, event);
+    // Запускает периодическое обновление времени каждую секунду
+    private setupTimeUpdates(): void {
+        this.timeUpdateInterval = window.setInterval(() => {
+            this.refreshTimeCells();
+        }, 1000);
     }
 
-    protected handleRowDoubleClick(moduleData: ModuleData, event: Event): void {
-        // Кастомная логика при двойном клике
-        console.log('Session table row double clicked:', moduleData.id_module);
+    // Обновляет все видимые ячейки времени
+    private refreshTimeCells(): void {
+        if (!this.gridApi) return;
 
-        super.handleRowDoubleClick(moduleData, event);
-    }
-
-    protected onSortChange(field: string, direction: 'asc' | 'desc'): void {
-        // Кастомная логика при сортировке
-        this.settingsManager.setSortSettings(field, direction);
-        console.log('Session table sorted by:', field, direction);
-    }
-
-    private applyCheckboxStates(checkboxStates: Record<string, { marker: boolean; trace: boolean }>): void {
-        // Обновляем ЧЕКБОКСЫ в таблице
-        Object.entries(checkboxStates).forEach(([moduleId, state]) => {
-            const markerCheckbox = this.element.querySelector(
-                `input[data-type="marker"][data-id="${moduleId}"]`
-            ) as HTMLInputElement;
-            const traceCheckbox = this.element.querySelector(
-                `input[data-type="trace"][data-id="${moduleId}"]`
-            ) as HTMLInputElement;
-
-            if (markerCheckbox) markerCheckbox.checked = state.marker;
-            if (traceCheckbox) traceCheckbox.checked = state.trace;
+        // Форсируем перерисовку ВСЕХ видимых ячеек времени
+        this.gridApi.refreshCells({
+            columns: ['datetime_unix', 'status'], // Только колонку времени
+            force: true, // Форсируем перерисовку даже если данные не изменились
         });
     }
 
-    protected onCheckboxChange(type: 'marker' | 'trace', moduleId: string, checked: boolean, event: Event): void {
-        console.log(`Checkbox ${type} changed for ${moduleId}:`, checked);
-
-        if (this.currentSessionId) {
-            this.settingsManager.setCheckboxState(this.currentSessionId, moduleId, type, checked);
-        }
-
-        // Специфичная логика для сессий
-        const eventType = type === 'marker' ? EventTypes.TABLE.CHECKBOX_MARKER : EventTypes.TABLE.CHECKBOX_TRACE;
-
-        eventBus.emit(eventType, {
-            id_module: moduleId,
-            flag: checked,
-        });
-
-        // Можно остановить всплытие если нужно
-        // event.stopPropagation();
-    }
-
-    protected onButtonClick(action: string | null, id: string | null, event: Event): void {
-        console.log('Button clicked:', action, id);
-    }
-
-    // 🔹 КАСТОМНЫЕ РЕНДЕРЕРЫ ЯЧЕЕК
-    private static renderStatusCell(moduleData: ModuleData): string {
-        const color = SessionDataTableComponent.getStatusColor(moduleData);
-        const tooltip = SessionDataTableComponent.getStatusTooltip(moduleData);
+    // Рендерит цветную точку статуса (зеленая/синяя/желтая/красная)
+    private statusCellRenderer(params: any): string {
+        const data = params.data;
+        const color = this.getStatusColor(data);
+        const tooltip = this.getStatusTooltip(data);
 
         return `
-            <td class="session-status-cell">
-                <span class="status-dot dynamic-dot" 
-                      style="background-color: ${color}"
-                      title="${tooltip}"
-                      data-bs-toggle="tooltip">
-                </span>
-            </td>
+            <div class="status-dot dynamic-dot" 
+                 style="background-color: ${color}"
+                 title="${tooltip}"
+                 data-bs-toggle="tooltip">
+            </div>
         `;
     }
 
-    private static renderCheckboxCell(type: 'marker' | 'trace', moduleData: ModuleData): string {
-        const checked = type === 'marker'; // По умолчанию маркеры включены
+    // Сортирует модули по приоритету статуса (свежесть данных + GPS)
+    private statusComparator(valueA: any, valueB: any, nodeA: any, nodeB: any): number {
+        // Получаем приоритет цвета для сортировки
+        const priorityA = this.getStatusPriority(nodeA.data);
+        const priorityB = this.getStatusPriority(nodeB.data);
 
-        return `
-            <td class="session-checkbox-cell">
-                <input type="checkbox" 
-                       class="${type}-checkbox" 
-                       data-type="${type}"
-                       data-id="${moduleData.id_module}"
-                       ${checked ? 'checked' : ''}>
-            </td>
-        `;
+        return priorityA - priorityB;
     }
 
-    private static renderModuleNameCell(moduleData: ModuleData): string {
-        return `
-            <td class="session-module-name-cell" style="color: ${moduleData.module_color || '#000000'}">
-                ${SessionDataTableComponent.escapeHtml(moduleData.module_name)}
-            </td>
-        `;
-    }
-
-    private static renderAltitudeCell(moduleData: ModuleData): string {
-        const altitude = moduleData.coords?.alt ? Math.round(moduleData.coords.alt) : 0;
-        return `
-            <td class="session-altitude-cell">
-                ${altitude} м
-            </td>
-        `;
-    }
-
-    private static renderTimeCell(moduleData: ModuleData): string {
-        const timeText = SessionDataTableComponent.formatTime(moduleData.datetime_unix);
-        return `
-            <td class="session-time-cell" 
-                data-timestamp="${moduleData.datetime_unix}"
-                data-original-time="${moduleData.datetime_unix}">
-                ${timeText}
-            </td>
-        `;
-    }
-
-    private renderDefaultCell(moduleData: ModuleData, column: TableColumn): string {
-        const value = this.getCellValue(moduleData, column.key);
-        return `
-            <td class="session-default-cell" data-column="${column.key}">
-                ${SessionDataTableComponent.escapeHtml(String(value))}
-            </td>
-        `;
-    }
-
-    // 🔹 ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
-    private getCellValue(moduleData: ModuleData, key: string): any {
-        switch (key) {
-            case 'coords.alt':
-                return moduleData.coords?.alt || 0;
-            case 'status':
-                return moduleData.gps_ok ? 'active' : 'error';
-            default:
-                return (moduleData as any)[key];
-        }
-    }
-
-    private static getStatusColor(moduleData: ModuleData): string {
+    // Определяет приоритет статуса для сортировки (1-4)
+    private getStatusPriority(moduleData: ModuleData): number {
         const now = Date.now();
         const timestamp =
             moduleData.datetime_unix < 100000000000 ? moduleData.datetime_unix * 1000 : moduleData.datetime_unix;
         const diffSeconds = (now - timestamp) / 1000;
 
         if (moduleData.gps_ok) {
-            if (diffSeconds < 60) return '#4CAF50';
-            if (diffSeconds < 300) return '#FFC107';
-            return '#F44336';
+            if (diffSeconds < 60) return 1; // зеленый - высший приоритет
+            if (diffSeconds < 300) return 3; // желтый
+            return 4; // красный
         } else {
-            if (diffSeconds < 60) return '#2196F3';
-            if (diffSeconds < 300) return '#FFC107';
-            return '#F44336';
+            if (diffSeconds < 60) return 2; // синий
+            if (diffSeconds < 300) return 3; // желтый
+            return 4; // красный
         }
     }
 
-    private static getStatusTooltip(moduleData: ModuleData): string {
+    // Возвращает цвет точки на основе статуса модуля
+    private getStatusColor(moduleData: ModuleData): string {
+        const priority = this.getStatusPriority(moduleData);
+
+        switch (priority) {
+            case 1:
+                return '#4CAF50'; // зеленый
+            case 2:
+                return '#2196F3'; // синий
+            case 3:
+                return '#FFC107'; // желтый
+            case 4:
+                return '#F44336'; // красный
+            default:
+                return '#6c757d'; // серый по умолчанию
+        }
+    }
+
+    // Создает всплывающую подсказку с информацией о статусе
+    private getStatusTooltip(moduleData: ModuleData): string {
         const now = Date.now();
         const timestamp =
             moduleData.datetime_unix < 100000000000 ? moduleData.datetime_unix * 1000 : moduleData.datetime_unix;
@@ -302,148 +251,176 @@ export class SessionDataTableComponent extends BaseTableComponent<ModuleData> {
         return `${statusText}\nДанные устарели (>300 сек)`;
     }
 
-    private static formatTime(unixTimestamp: number): string {
-        if (!unixTimestamp) return 'Н/Д';
-
-        const timestamp = unixTimestamp < 100000000000 ? unixTimestamp * 1000 : unixTimestamp;
-        const messageTime = new Date(timestamp);
-
-        if (isNaN(messageTime.getTime())) {
-            return 'Н/Д';
+    // Обрабатывает клики по ячейкам (только чекбоксы)
+    private handleCellClick(params: any): void {
+        // Обрабатываем клики только по чекбоксам
+        if (params.colDef.field !== 'visible_marker' && params.colDef.field !== 'visible_trace') {
+            return;
         }
 
-        const now = new Date();
-        const elapsedSeconds = Math.floor((now.getTime() - messageTime.getTime()) / 1000);
-        const minutes = Math.floor(elapsedSeconds / 60);
-        const seconds = elapsedSeconds % 60;
-
-        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        const target = params.event.target as HTMLInputElement;
+        if (target && target.type === 'checkbox') {
+            this.handleCheckboxChange(target, params.data);
+        }
     }
 
-    private static escapeHtml(unsafe: string): string {
-        return unsafe
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
+    // Обновляет состояние чекбокса и сохраняет в настройках
+    private handleCheckboxChange(checkbox: HTMLInputElement, moduleData: GridModuleData): void {
+        const moduleId = moduleData.id_module;
+        const type = checkbox.getAttribute('data-type') as 'marker' | 'trace';
+        const checked = checkbox.checked;
+
+        // Обновляем данные в таблице
+        if (type === 'marker') {
+            moduleData.visible_marker = checked;
+        } else {
+            moduleData.visible_trace = checked;
+        }
+
+        // Сохраняем состояние в настройках
+        this.settingsManager.setCheckboxState(this.currentSessionId, moduleId, type, checked);
+
+        // Обновляем строку в таблице
+        this.gridApi.applyTransaction({ update: [moduleData] });
+
+        // Отправляем событие через EventBus
+        this.emitCheckboxEvent(type, moduleId, checked, moduleData);
     }
 
-    // 🔹 ОБНОВЛЕНИЕ ВРЕМЕНИ В РЕАЛЬНОМ ВРЕМЕНИ
-    private setupTimeUpdates(): void {
-        this.timeUpdateInterval = window.setInterval(() => {
-            this.updateTimeCells();
-        }, 1000);
-    }
+    // Отправляет событие об изменении видимости маркера/трассы
+    private emitCheckboxEvent(
+        type: 'marker' | 'trace',
+        id_module: string,
+        checked: boolean,
+        moduleData: GridModuleData
+    ): void {
+        const eventType = type === 'marker' ? EventTypes.TABLE.CHECKBOX_MARKER : EventTypes.TABLE.CHECKBOX_TRACE;
 
-    private updateTimeCells(): void {
-        const timeCells = this.element.querySelectorAll('.session-time-cell');
-        timeCells.forEach((cell) => {
-            const timestamp = cell.getAttribute('data-original-time');
-            if (timestamp) {
-                const unixTimestamp = parseInt(timestamp);
-                const newTime = SessionDataTableComponent.formatTime(unixTimestamp);
-                if (cell.textContent !== newTime) {
-                    cell.textContent = newTime;
-                }
-            }
+        eventBus.emit(eventType, {
+            id_module,
+            checked,
+            moduleData,
+            sessionId: this.currentSessionId,
         });
     }
 
-    // Обработка загрузки данных сессии
-    private handleSessionDataLoad(modules: ModuleData[]): void {
-        console.log('📊 Setting session data:', modules.length, 'modules');
-
-        this.setData(modules, () => {
-            console.log('✅ Data set complete, restoring state');
-            this.restoreTableState();
-        });
-    }
-
-    // 🔹 ОБРАБОТЧИКИ СОБЫТИЙ
+    // Подписывается на события смены сессии, загрузки данных, реального времени
     private setupEventListeners(): void {
-        // Существующие
-        eventBus.on(EventTypes.SOCKET.NEW_DATA_MODULE, (data: any) => {
-            console.log('📡 SessionDataTable received module data:', data);
-            if (data?.points) {
-                this.handleNewModuleData(data.points);
-            }
-        });
-
         eventBus.on(EventTypes.SESSION.SELECTED, (session: any) => {
-            console.log('🎯 Session selected:', session);
             this.handleSessionChange(session);
         });
 
-        eventBus.on(EventTypes.TABLE.CLEAR, () => {
-            console.log('🧹 Clearing table data');
-            this.clearData();
-        });
-
-        // Загрузка данных сессии
         eventBus.on(EventTypes.SESSION.LOAD_DATA, (sessionData: any) => {
-            console.log('📂 Loading session data:', sessionData);
             if (sessionData?.modules) {
                 this.handleSessionDataLoad(sessionData.modules);
             }
         });
-    }
 
-    // 🔹 ПУБЛИЧНЫЕ МЕТОДЫ API
-    public handleCheckboxChange(type: 'marker' | 'trace', moduleId: string, checked: boolean): void {
-        const eventType = type === 'marker' ? EventTypes.TABLE.CHECKBOX_MARKER : EventTypes.TABLE.CHECKBOX_TRACE;
-
-        eventBus.emit(eventType, {
-            id_module: moduleId,
-            flag: checked,
+        eventBus.on(EventTypes.SOCKET.NEW_DATA_MODULE, (data: any) => {
+            this.handleRealTimeData(data);
         });
-
-        console.log(`Checkbox ${type} changed for ${moduleId}:`, checked);
     }
 
-    public handleNewModuleData(messages: ModuleData[]): void {
-        // Обновляем данные в таблице
-        const newData = Array.isArray(messages) ? messages : Object.values(messages);
-        this.appendData(newData as ModuleData[]);
-    }
+    // Загружает данные модулей в таблицу при выборе сессии
+    private handleSessionDataLoad(modules: ModuleData[]): void {
+        // используем SettingsManager для начального состояния
+        const enrichedData = modules.map((data) => this.enrichModuleData(data));
 
-    // Улучшенная обработка смены сессии
-    private handleSessionChange(session: any): void {
-        console.log('🔄 Session changed in table:', session);
-        this.currentSessionId = session?.id || null;
-
-        // Очищаем таблицу при смене сессии
-        this.clearData();
-
-        // Если передан объект сессии с данными, загружаем их
-        if (session?.modules) {
-            this.handleSessionDataLoad(session.modules);
+        if (this.gridApi) {
+            this.gridApi.setGridOption('rowData', enrichedData);
         }
     }
 
-    public setSessionData(sessionData: ModuleData[]): void {
-        this.setData(sessionData);
+    // Обновляет данные в реальном времени при получении новых точек
+    private handleRealTimeData(data: any): void {
+        if (!this.gridApi || !this.currentSessionId) return;
+
+        const newData = data.points || data.modules || [data];
+        if (!Array.isArray(newData) || newData.length === 0) return;
+
+        const updates: GridModuleData[] = [];
+        const additions: GridModuleData[] = [];
+
+        newData.forEach((moduleData: ModuleData) => {
+            const rowNode = this.gridApi.getRowNode(moduleData.id_module);
+
+            if (rowNode && rowNode.data) {
+                // сохраняем текущие состояния чекбоксов
+                const updatedData = {
+                    ...moduleData,
+                    visible_marker: rowNode.data.visible_marker, // текущее состояние
+                    visible_trace: rowNode.data.visible_trace, // текущее состояние
+                    'coords.alt': moduleData.coords?.alt,
+                    _lastUpdate: Date.now(),
+                };
+                updates.push(updatedData);
+            } else {
+                // используем значения по умолчанию
+                const newRowData = {
+                    ...moduleData,
+                    visible_marker: true, // по умолчанию
+                    visible_trace: false, // по умолчанию
+                    'coords.alt': moduleData.coords?.alt,
+                };
+                additions.push(newRowData);
+            }
+        });
+
+        if (updates.length > 0 || additions.length > 0) {
+            this.gridApi.applyTransaction({ update: updates, add: additions });
+            this.refreshStatusCells();
+        }
     }
 
-    // 🔹 ОЧИСТКА РЕСУРСОВ
-    public override destroy(): void {
+    // Обновляет только ячейки статуса после получения новых данных
+    private refreshStatusCells(): void {
+        if (!this.gridApi) return;
+
+        // Обновляем только статусы сразу после получения данных
+        this.gridApi.refreshCells({
+            columns: ['status'],
+            force: true,
+        });
+    }
+
+    // Обогащает данные модулей состояниями чекбоксов из настроек
+    private enrichModuleData(moduleData: ModuleData): GridModuleData {
+        // Загружаем сохраненные состояния чекбоксов
+        const checkboxState = this.currentSessionId
+            ? this.settingsManager.getCheckboxState(this.currentSessionId, moduleData.id_module)
+            : { marker: true, trace: false };
+
+        return {
+            ...moduleData,
+            visible_marker: checkboxState.marker,
+            visible_trace: checkboxState.trace,
+            'coords.alt': moduleData.coords?.alt,
+        };
+    }
+
+    // Обрабатывает смену активной сессии - очищает или загружает данные
+    private handleSessionChange(session: any): void {
+        this.currentSessionId = session?.id || null;
+
+        if (this.gridApi) {
+            this.gridApi.setGridOption('rowData', []);
+        }
+    }
+
+    // Очищает таймеры, отписывается от событий, уничтожает таблицу
+    public destroy(): void {
+        // Очищаем таймер
         if (this.timeUpdateInterval) {
             clearInterval(this.timeUpdateInterval);
             this.timeUpdateInterval = null;
         }
 
-        // Отписываемся от событий
-        eventBus.off(EventTypes.SOCKET.NEW_DATA_MODULE, this.handleNewModuleData);
+        // Отписываемся от EventBus
+        eventBus.off(EventTypes.SOCKET.NEW_DATA_MODULE, this.handleRealTimeData);
         eventBus.off(EventTypes.SESSION.SELECTED, this.handleSessionChange);
-        eventBus.off(EventTypes.TABLE.CLEAR, this.clearData);
+        eventBus.off(EventTypes.SESSION.LOAD_DATA, this.handleSessionDataLoad);
 
-        super.destroy();
-    }
-}
-
-// Глобальная ссылка для обработчиков в HTML
-declare global {
-    interface Window {
-        sessionTable: SessionDataTableComponent;
+        // Уничтожаем grid
+        this.gridApi?.destroy();
     }
 }

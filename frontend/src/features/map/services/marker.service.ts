@@ -97,7 +97,7 @@ export class MarkerService {
         eventBus.on(EventTypes.TABLE.CHECKBOX_MARKER, (data: any) => {
             console.log('MarkerService received checkbox event:', data);
             if (data?.id_module) {
-                this.setMarkerVisibility(data.id_module, data.flag);
+                this.setMarkerVisibility(data.id_module, data.checked);
             }
         });
     }

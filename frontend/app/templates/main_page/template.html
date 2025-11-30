@@ -1,8 +1,4 @@
-{% extends "base/base.html" %}
-
-{% from "components/ui/navbar/navbar.html" import navbar %}
-
-{% block body %}
+{% extends "base/base.html" %} {% from "components/ui/navbar/navbar.html" import navbar %} {% block body %}
 
 <!-- Контейнер для модальных окон аутентификации -->
 <div id="auth-modals-container"></div>
@@ -14,31 +10,37 @@
     </div>
 </div>
 
-<div class="container-fluid vh-100 d-flex p-0 position-relative" style="min-height: 0;"> 
+<div class="container-fluid vh-100 d-flex p-0 position-relative" style="min-height: 0">
     <!-- Панель отладки слева - с абсолютным позиционированием -->
-    <div class="position-absolute h-100" id="debug-panel-container" style="z-index: 1000;">
+    <div class="position-absolute h-100" id="debug-panel-container" style="z-index: 1000">
         <!-- Основная панель отладки -->
-        <div class="bg-light border-end h-100" id="debug-panel" style="width: 300px; overflow-y: auto;">
+        <div class="bg-light border-end h-100" id="debug-panel" style="width: 300px; overflow-y: auto">
             <div class="p-3">
                 <h6 class="fw-bold mb-3 text-center">Панель отладки</h6>
-                
+
                 <!-- Кнопки управления -->
                 <div class="mb-3">
                     <button class="btn btn-sm btn-outline-primary w-100 mb-2" id="debug-test-btn">
                         Тестовая кнопка
                     </button>
-                    <button class="btn btn-sm btn-outline-secondary w-100" id="debug-clear-btn">
-                        Очистить логи
-                    </button>
+                    <button class="btn btn-sm btn-outline-secondary w-100" id="debug-clear-btn">Очистить логи</button>
                 </div>
 
                 <!-- Поля ввода -->
                 <div class="mb-3">
                     <label class="form-label small fw-semibold">Параметры:</label>
-                    <input type="text" class="form-control form-control-sm mb-2" placeholder="Параметр 1"
-                        id="debug-param1">
-                    <input type="number" class="form-control form-control-sm mb-2" placeholder="Параметр 2"
-                        id="debug-param2">
+                    <input
+                        type="text"
+                        class="form-control form-control-sm mb-2"
+                        placeholder="Параметр 1"
+                        id="debug-param1"
+                    />
+                    <input
+                        type="number"
+                        class="form-control form-control-sm mb-2"
+                        placeholder="Параметр 2"
+                        id="debug-param2"
+                    />
                     <select class="form-select form-select-sm" id="debug-select">
                         <option value="">Выберите опцию</option>
                         <option value="option1">Опция 1</option>
@@ -51,23 +53,19 @@
                 <div class="mb-3">
                     <label class="form-label small fw-semibold">Настройки:</label>
                     <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="debug-toggle1">
-                        <label class="form-check-label small" for="debug-toggle1">
-                            Включить отладку
-                        </label>
+                        <input class="form-check-input" type="checkbox" id="debug-toggle1" />
+                        <label class="form-check-label small" for="debug-toggle1"> Включить отладку </label>
                     </div>
                     <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="debug-toggle2" checked>
-                        <label class="form-check-label small" for="debug-toggle2">
-                            Показывать логи
-                        </label>
+                        <input class="form-check-input" type="checkbox" id="debug-toggle2" checked />
+                        <label class="form-check-label small" for="debug-toggle2"> Показывать логи </label>
                     </div>
                 </div>
 
                 <!-- Ползунок времени маршрута -->
                 <div class="mb-3">
                     <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="route-time-slider-toggle">
+                        <input class="form-check-input" type="checkbox" id="route-time-slider-toggle" />
                         <label class="form-check-label small" for="route-time-slider-toggle">
                             Показать временной ползунок
                         </label>
@@ -80,8 +78,11 @@
                 <!-- Логи -->
                 <div class="mt-3">
                     <label class="form-label small fw-semibold">Логи:</label>
-                    <div id="debug-logs" class="bg-dark text-white p-2 small"
-                        style="height: 150px; overflow-y: auto; font-family: monospace;">
+                    <div
+                        id="debug-logs"
+                        class="bg-dark text-white p-2 small"
+                        style="height: 150px; overflow-y: auto; font-family: monospace"
+                    >
                         <!-- Логи будут здесь -->
                     </div>
                 </div>
@@ -90,41 +91,38 @@
     </div>
 
     <!-- Кнопка скрытия/показа -->
-    <button class="btn btn-secondary position-absolute" id="debug-toggle-btn"
-        style="top: 10px; left: 10px; z-index: 1001; padding: 5px 8px;">
+    <button
+        class="btn btn-secondary position-absolute"
+        id="debug-toggle-btn"
+        style="top: 10px; left: 10px; z-index: 1001; padding: 5px 8px"
+    >
         ◀
     </button>
 
     <!-- Основной контент -->
-    <div class="flex-grow-1 d-flex flex-column" style="min-height: 0;">
-
+    <div class="flex-grow-1 d-flex flex-column" style="min-height: 0">
         <!-- Navbar -->
-        <div id="navbar-container">
-            {{ navbar(user=user_data) }}
-        </div>
+        <div id="navbar-container">{{ navbar(user=user_data) }}</div>
 
-        <div class="container-fluid h-100 d-flex flex-column p-0" style="min-height: 0;">
-            <div class="row flex-grow-1 m-0" style="min-height: 0;">
+        <div class="container-fluid h-100 d-flex flex-column p-0" style="min-height: 0">
+            <div class="row flex-grow-1 m-0" style="min-height: 0">
                 <!-- Левая колонка с картой -->
-                <div class="col-md-8 p-0 d-flex flex-column position-relative" style="min-height: 0;">
-                    <div id="map" class="flex-grow-1" style="min-height: 300px;"></div>
+                <div class="col-md-8 p-0 d-flex flex-column position-relative" style="min-height: 0">
+                    <div id="map" class="flex-grow-1" style="min-height: 300px"></div>
                 </div>
 
                 <!-- Правая колонка с таблицей -->
                 <div class="col-md-4 p-0 d-flex flex-column h-100">
-
                     <!-- Блок с контролами - фиксированной высоты -->
                     <div class="d-flex align-items-center p-2 bg-light border-bottom flex-shrink-0">
                         <select class="form-select form-select-sm me-2" id="data-select">
                             <option selected disabled>Выберите сессию</option>
                         </select>
-                        <button class="btn btn-sm btn-success" id="add-data" title="Добавить новую сессию">
-                            +
-                        </button>
+                        <button class="btn btn-sm btn-success" id="add-data" title="Добавить новую сессию">+</button>
                     </div>
-                
+
                     <!-- Контейнер таблицы - растягивается на оставшееся пространство -->
-                    <div id="table-container" style="flex: 1; min-height: 0; overflow-y: auto;">
+                    <div id="table-container" style="flex: 1; min-height: 0; overflow-y: auto">
                         <!-- SessionDataTableComponent будет рендериться здесь -->
                     </div>
                 </div>
@@ -133,32 +131,55 @@
     </div>
 </div>
 
-<div id="route-time-slider-container" class="position-fixed d-none"
-    style="bottom: 15px; left: 50%; transform: translateX(-50%); z-index: 1002; background: rgba(255, 255, 255, 0.88); padding: 12px 18px; border-radius: 20px; box-shadow: 0 4px 25px rgba(0,0,0,0.18); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.4); min-width: 600px; max-width: 80vw;">
-
+<div
+    id="route-time-slider-container"
+    class="position-fixed d-none"
+    style="
+        bottom: 15px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1002;
+        background: rgba(255, 255, 255, 0.88);
+        padding: 12px 18px;
+        border-radius: 20px;
+        box-shadow: 0 4px 25px rgba(0, 0, 0, 0.18);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        min-width: 600px;
+        max-width: 80vw;
+    "
+>
     <!-- Ползунок времени - ПЕРВАЯ СТРОКА -->
     <div class="mb-2">
-        <input type="range" class="form-range" id="route-time-slider" min="0" max="1000" value="0" step="1"
-            style="width: 100%;">
+        <input
+            type="range"
+            class="form-range"
+            id="route-time-slider"
+            min="0"
+            max="1000"
+            value="0"
+            step="1"
+            style="width: 100%"
+        />
     </div>
 
     <!-- ПЕРВАЯ СТРОКА: время начала, текущее время и время конца -->
     <div class="d-flex align-items-center justify-content-between mb-2 mobile-time-row">
         <!-- Время начала -->
-        <div class="text-muted fw-medium mobile-time-text" style="opacity: 0.9;">
+        <div class="text-muted fw-medium mobile-time-text" style="opacity: 0.9">
             <span id="route-time-start">00:00:00</span>
         </div>
 
         <!-- Текущее время -->
-        <div class="bg-light rounded-2 px-2 py-1 mobile-current-time"
-            style="background: rgba(248, 249, 250, 0.9) !important; border: 1px solid rgba(0,0,0,0.08);">
-            <span id="route-time-current" class="fw-bold text-dark">
-                00:00:00
-            </span>
+        <div
+            class="bg-light rounded-2 px-2 py-1 mobile-current-time"
+            style="background: rgba(248, 249, 250, 0.9) !important; border: 1px solid rgba(0, 0, 0, 0.08)"
+        >
+            <span id="route-time-current" class="fw-bold text-dark"> 00:00:00 </span>
         </div>
 
         <!-- Время конца -->
-        <div class="text-muted fw-medium mobile-time-text text-end" style="opacity: 0.9;">
+        <div class="text-muted fw-medium mobile-time-text text-end" style="opacity: 0.9">
             <span id="route-time-end">00:00:00</span>
         </div>
     </div>
@@ -166,19 +187,21 @@
     <!-- ВТОРАЯ СТРОКА: кнопки управления -->
     <div class="d-flex align-items-center justify-content-center mobile-controls-row">
         <!-- Кнопка перемотки назад -->
-        <button class="btn btn-outline-secondary btn-sm mobile-control-btn" id="route-time-prev" style="opacity: 0.9;">
+        <button class="btn btn-outline-secondary btn-sm mobile-control-btn" id="route-time-prev" style="opacity: 0.9">
             ◀
         </button>
 
         <!-- Кнопка пуск/пауза -->
         <button
             class="btn btn-success rounded-circle d-flex align-items-center justify-content-center mx-2 mobile-play-btn"
-            id="route-time-play" style="opacity: 0.95;">
-            <span style="font-size: 0.85em; margin-left: 1px;">▶</span>
+            id="route-time-play"
+            style="opacity: 0.95"
+        >
+            <span style="font-size: 0.85em; margin-left: 1px">▶</span>
         </button>
 
         <!-- Кнопка перемотки вперед -->
-        <button class="btn btn-outline-secondary btn-sm mobile-control-btn" id="route-time-next" style="opacity: 0.9;">
+        <button class="btn btn-outline-secondary btn-sm mobile-control-btn" id="route-time-next" style="opacity: 0.9">
             ▶
         </button>
     </div>
@@ -193,18 +216,16 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-0">
-                <div class="row g-0" style="min-height: 400px;">
+                <div class="row g-0" style="min-height: 400px">
                     <!-- Левая панель - список сессий -->
-                    <div class="col-md-4 border-end" style="overflow-y: auto; max-height: 70vh;">
+                    <div class="col-md-4 border-end" style="overflow-y: auto; max-height: 70vh">
                         <div class="p-3">
                             <button class="btn btn-primary w-100 mb-3 fw-medium" id="createNewSession">
                                 <i class="bi bi-plus-lg me-2"></i>Новая сессия
                             </button>
                             <div class="list-group list-group-flush" id="sessionsList">
                                 <!-- Список сессий будет здесь -->
-                                <div class="list-group-item text-center text-muted py-4">
-                                    Загрузка сессий...
-                                </div>
+                                <div class="list-group-item text-center text-muted py-4">Загрузка сессий...</div>
                             </div>
                         </div>
                     </div>
@@ -218,11 +239,11 @@
                             </div>
 
                             <!-- Форма для новой сессии (изначально скрыта) -->
-                            <form id="newSessionForm" style="display: none;">
+                            <form id="newSessionForm" style="display: none">
                                 <h5 class="mb-4 fw-semibold">Создание новой сессии</h5>
                                 <div class="mb-3">
                                     <label for="newSessionName" class="form-label">Название сессии*</label>
-                                    <input type="text" class="form-control" id="newSessionName" required>
+                                    <input type="text" class="form-control" id="newSessionName" required />
                                 </div>
                                 <div class="mb-3">
                                     <label for="newSessionDescription" class="form-label">Описание</label>
@@ -230,22 +251,23 @@
                                 </div>
                                 <div class="mb-4">
                                     <label for="newSessionDate" class="form-label">Дата</label>
-                                    <input type="date" class="form-control" id="newSessionDate" value="">
+                                    <input type="date" class="form-control" id="newSessionDate" value="" />
                                 </div>
                                 <div class="d-flex justify-content-end">
-                                    <button type="button" class="btn btn-outline-secondary me-2"
-                                        id="cancelCreate">Отмена</button>
+                                    <button type="button" class="btn btn-outline-secondary me-2" id="cancelCreate">
+                                        Отмена
+                                    </button>
                                     <button type="submit" class="btn btn-primary">Создать</button>
                                 </div>
                             </form>
 
                             <!-- Форма для редактирования существующей сессии (изначально скрыта) -->
-                            <form id="editSessionForm" style="display: none;">
+                            <form id="editSessionForm" style="display: none">
                                 <h5 class="mb-4 fw-semibold">Редактирование сессии</h5>
-                                <input type="hidden" id="editSessionId">
+                                <input type="hidden" id="editSessionId" />
                                 <div class="mb-3">
                                     <label for="editSessionName" class="form-label">Название сессии*</label>
-                                    <input type="text" class="form-control" id="editSessionName" required>
+                                    <input type="text" class="form-control" id="editSessionName" required />
                                 </div>
                                 <div class="mb-3">
                                     <label for="editSessionDescription" class="form-label">Описание</label>
@@ -253,7 +275,7 @@
                                 </div>
                                 <div class="mb-4">
                                     <label for="editSessionDate" class="form-label">Дата</label>
-                                    <input type="date" class="form-control" id="editSessionDate">
+                                    <input type="date" class="form-control" id="editSessionDate" />
                                 </div>
 
                                 <h6 class="mt-4 mb-3 fw-semibold">Участники</h6>
@@ -267,8 +289,9 @@
                                         <i class="bi bi-trash me-1"></i>Удалить
                                     </button>
                                     <div>
-                                        <button type="button" class="btn btn-outline-secondary me-2"
-                                            id="cancelEdit">Отмена</button>
+                                        <button type="button" class="btn btn-outline-secondary me-2" id="cancelEdit">
+                                            Отмена
+                                        </button>
                                         <button type="submit" class="btn btn-primary">Сохранить</button>
                                     </div>
                                 </div>
@@ -281,9 +304,7 @@
     </div>
 </div>
 
-{% endblock %}
-
-{% block styles %}
+{% endblock %} {% block styles %}
 <link href="/static/components/main_page/styles.css" rel="stylesheet" />
 <link href="/static/components/slide_panel/slide-panel.css" rel="stylesheet" />
 <link href="/static/components/auth/auth-styles.css" rel="stylesheet" />
@@ -292,9 +313,7 @@
 
 <link href="/static/components/base-table/styles/base-table-styles.css" rel="stylesheet" />
 <link href="/static/components/session-data-table/session-data-table-styles.css" rel="stylesheet" />
-{% endblock %}
-
-{% block scripts %}
+{% endblock %} {% block scripts %}
 <!-- TypeScript модуль -->
 <script src="/static/dist/bundle.js" type="module" defer></script>
 
