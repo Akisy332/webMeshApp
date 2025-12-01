@@ -3,19 +3,22 @@
     "version": "1.0.0",
     "type": "module",
     "scripts": {
-        "build": "tsc && npm run bundle && npm run copy-css",
+        "build": "npm run copy-ag-grid-styles && tsc && npm run bundle && npm run copy-css && npm run copy-features-css",
         "build:watch": "tsc --watch",
         "build:prod": "tsc && npm run bundle",
         "bundle": "esbuild src/main.ts --bundle --outfile=app/static/dist/bundle.js --format=esm --platform=browser",
         "copy-css": "mkdir -p app/static/components && cp -r src/components/. app/static/components/",
-        "dev": "tsc && npm run copy-css && python run.py"
+        "copy-features-css": "mkdir -p app/static/features && cp -r src/features/. app/static/features/",
+        "copy-ag-grid-styles": "mkdir -p app/static/dist/ag-grid && cp node_modules/ag-grid-community/styles/ag-grid.css node_modules/ag-grid-community/styles/ag-theme-alpine.css app/static/dist/ag-grid/",
+        "dev": "tsc && npm run copy-css && npm run copy-features-css && python run.py"
     },
     "dependencies": {
+        "ag-grid-community": "^31.0.3",
         "leaflet": "^1.7.1"
     },
     "devDependencies": {
-        "typescript": "^5.3.3",
+        "@types/leaflet": "^1.7.0",
         "esbuild": "^0.19.0",
-        "@types/leaflet": "^1.7.0"
+        "typescript": "^5.3.3"
     }
 }

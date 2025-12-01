@@ -6,9 +6,30 @@ import { MarkerConfig } from '../types/map.types.js';
 export class MarkerService {
     private markers: Map<string, L.Marker> = new Map();
     private map: L.Map | null = null;
+    private isLiveMode: boolean = true;
 
     constructor() {
         this.setupEventListeners();
+    }
+
+    public setLiveMode(live: boolean): void {
+        this.isLiveMode = live;
+        console.log(`MarkerService: Live mode ${live ? 'enabled' : 'disabled'}`);
+
+        // При переключении в live-режим можно сбросить какие-то состояния если нужно
+        if (live) {
+            // Например, показать все маркеры
+            this.markers.forEach((marker, id) => {
+                marker.setOpacity(1);
+            });
+        }
+    }
+
+    public updateMarkerPosition(moduleId: string, position: [number, number]): void {
+        const marker = this.markers.get(moduleId);
+        if (marker) {
+            marker.setLatLng(position);
+        }
     }
 
     public initialize(map: L.Map): void {
@@ -98,6 +119,37 @@ export class MarkerService {
             console.log('MarkerService received checkbox event:', data);
             if (data?.id_module) {
                 this.setMarkerVisibility(data.id_module, data.checked);
+            }
+        });
+
+        eventBus.on(EventTypes.SOCKET.NEW_DATA_MODULE, (data: any) => {
+            this.handleRealTimeData(data);
+        });
+    }
+
+    private handleRealTimeData(data: any): void {
+        // В не-live режиме игнорируем новые данные
+        if (!this.isLiveMode) {
+            console.log(`MarkerService: Ignoring real-time data in playback mode`);
+            return;
+        }
+
+        if (!data?.points) return;
+
+        data.points.forEach((moduleData: any) => {
+            if (!moduleData.coords?.lat || !moduleData.coords?.lon) return;
+
+            const position: [number, number] = [moduleData.coords.lat, moduleData.coords.lon];
+
+            if (this.has(moduleData.id_module)) {
+                this.updateMarker(moduleData.id_module, { position });
+            } else {
+                this.addMarker({
+                    id: moduleData.id_module,
+                    position: position,
+                    title: moduleData.module_name,
+                    color: moduleData.module_color || '#007bff',
+                });
             }
         });
     }

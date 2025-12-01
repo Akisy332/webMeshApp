@@ -9,9 +9,6 @@ import { LoginForm } from './components/auth/login-form.js';
 import { RegisterForm } from './components/auth/register-form.js';
 import { Navbar } from './components/ui/navbar/navbar.js';
 import { SessionModalWindow } from './components/session/modal-window.js';
-import { DebugPanel } from './components/debug/debug-panel.js';
-import { TimeRangeSlider } from './components/time-slider/time-range-slider.js';
-import { SlidePanel } from './components/slide-panel/slide-panel.js';
 import { SocketService } from './core/socket-service.js';
 
 class MainApp {
@@ -26,9 +23,6 @@ class MainApp {
     private registerForm?: RegisterForm;
     private navbar?: Navbar;
     private sessionModalWindow?: SessionModalWindow;
-    private debugPanel?: DebugPanel;
-    private timeRangeSlider?: TimeRangeSlider;
-    private slidePanel?: SlidePanel;
     private socketService?: SocketService;
 
     constructor() {
@@ -140,34 +134,9 @@ class MainApp {
             // Инициализация модального окна сессий
             this.sessionModalWindow = new SessionModalWindow();
             console.log('SessionModalWindow initialized');
-
-            // Инициализация панели отладки
-            this.debugPanel = new DebugPanel('debug-panel-container');
-            console.log('DebugPanel initialized');
-
-            // Инициализация слайдера времени
-            this.timeRangeSlider = new TimeRangeSlider();
-            console.log('TimeRangeSlider initialized');
-
-            // Инициализация выдвижной панели
-            this.slidePanel = new SlidePanel();
-            console.log('SlidePanel initialized');
         } catch (error) {
             console.error('Failed to initialize services:', error);
-            this.debugPanel?.addLog(`Ошибка инициализации: ${error}`);
         }
-    }
-
-    public getSlidePanel(): SlidePanel | undefined {
-        return this.slidePanel;
-    }
-
-    public getTimeRangeSlider(): TimeRangeSlider | undefined {
-        return this.timeRangeSlider;
-    }
-
-    public getDebugPanel(): DebugPanel | undefined {
-        return this.debugPanel;
     }
 
     private setupAuthEvents(): void {

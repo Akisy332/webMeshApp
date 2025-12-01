@@ -1,5 +1,18 @@
 // features/map/types/leaflet.d.ts
 declare module 'leaflet' {
+    export namespace DomUtil {
+        function create(tagName: string, className?: string, container?: HTMLElement): HTMLElement;
+        function get(id: string | HTMLElement): HTMLElement | null;
+    }
+
+    export namespace DomEvent {
+        function on(el: HTMLElement, types: string, fn: EventListener, context?: any): typeof DomEvent;
+        function off(el: HTMLElement, types: string, fn: EventListener, context?: any): typeof DomEvent;
+        function disableClickPropagation(el: HTMLElement): typeof DomEvent;
+        function preventDefault(e: Event): typeof DomEvent;
+        function stopPropagation(e: Event): typeof DomEvent;
+    }
+
     export function map(element: string | HTMLElement, options?: any): Map;
 
     export function tileLayer(url: string, options?: any): TileLayer;
@@ -16,6 +29,19 @@ declare module 'leaflet' {
 
     export function divIcon(options: any): DivIcon;
 
+    export interface LeafletMouseEvent {
+        latlng: LatLng;
+        layerPoint: Point;
+        containerPoint: Point;
+        originalEvent: MouseEvent;
+    }
+
+    export class Point {
+        x: number;
+        y: number;
+        constructor(x: number, y: number);
+    }
+
     export class Map {
         setView(center: [number, number], zoom: number): Map;
         addLayer(layer: any): Map;
@@ -27,6 +53,9 @@ declare module 'leaflet' {
         getCenter(): { lat: number; lng: number };
         getZoom(): number;
         on(event: string, handler: Function): Map;
+        getContainer(): HTMLElement;
+        latLngToContainerPoint(latlng: LatLng): Point;
+        containerPointToLatLng(point: Point): LatLng;
     }
 
     export class TileLayer {

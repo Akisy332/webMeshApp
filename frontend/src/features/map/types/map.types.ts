@@ -34,3 +34,23 @@ export interface MapEventData {
     type: 'marker_click' | 'map_click' | 'zoom_changed';
     data: any;
 }
+
+export interface ContextMenuItem {
+    id: string;
+    label: string;
+    icon?: string;
+    action: (position: [number, number]) => void;
+    separator?: boolean;
+}
+
+export interface ContextMenuSeparator {
+    id: string;
+    separator: true;
+}
+
+export type ContextMenuElement = ContextMenuItem | ContextMenuSeparator;
+
+export interface ContextMenuConfig {
+    items: ContextMenuElement[];
+    position?: [number, number];
+}

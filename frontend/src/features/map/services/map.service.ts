@@ -6,6 +6,9 @@ import { MapConfig, MarkerConfig, TraceConfig } from '../types/map.types.js';
 import { MarkerService } from './marker.service.js';
 import { TraceService } from './trace.service.js';
 import { LayerService } from './layer.service.js';
+import { ContextMenuService } from './context-menu.service.js';
+
+import { timeSlider, TimeSliderPlugin } from '../plugins/time-slider.plugin.js';
 
 export class MapService {
     private settingsManager: ISettingsManager;
@@ -17,6 +20,9 @@ export class MapService {
     private markerService: MarkerService;
     private traceService: TraceService;
     private layerService: LayerService;
+    private contextMenuService: ContextMenuService;
+
+    private timeSliderPlugin: TimeSliderPlugin | null = null;
 
     constructor(config: MapConfig, settingsManager?: ISettingsManager) {
         this.config = config;
@@ -26,6 +32,7 @@ export class MapService {
         this.markerService = new MarkerService();
         this.traceService = new TraceService();
         this.layerService = new LayerService();
+        this.contextMenuService = new ContextMenuService();
 
         this.initialize();
     }
@@ -35,6 +42,7 @@ export class MapService {
             this.createMap();
             this.initializeSubServices();
             this.setupEventListeners();
+            this.initializeTimeSlider();
 
             console.log('MapService initialized successfully');
         } catch (error) {
@@ -61,6 +69,14 @@ export class MapService {
         this.markerService.initialize(this.map);
         this.traceService.initialize(this.map);
         this.layerService.initialize(this.map);
+        this.contextMenuService.initialize(this.map);
+
+        this.traceService.setMarkerService(this.markerService);
+    }
+
+    private initializeTimeSlider(): void {
+        if (!this.map) return;
+        this.timeSliderPlugin = timeSlider(this.map);
     }
 
     private setupEventListeners(): void {
@@ -76,11 +92,6 @@ export class MapService {
 
             // 3. Восстанавливаем состояние треков из памяти
             this.restoreTracesState();
-        });
-
-        // ОБНОВЛЯЕМ маркеры при новых данных
-        eventBus.on(EventTypes.SOCKET.NEW_DATA_MODULE, (data: any) => {
-            this.handleRealTimeData(data);
         });
 
         // ОЧИЩАЕМ карту при выборе новой сессии (до загрузки данных)
@@ -177,32 +188,16 @@ export class MapService {
         return this.layerService.getCurrentBaseLayer();
     }
 
-    // Обработчики событий
-    private handleRealTimeData(data: any): void {
-        if (!data?.points) return;
-
-        data.points.forEach((moduleData: any) => {
-            if (!moduleData.coords?.lat || !moduleData.coords?.lon) return;
-
-            const position: [number, number] = [moduleData.coords.lat, moduleData.coords.lon];
-
-            // Обновляем маркер
-            if (this.markerService.has(moduleData.id_module)) {
-                this.markerService.updateMarker(moduleData.id_module, { position });
-            } else {
-                this.markerService.addMarker({
-                    id: moduleData.id_module,
-                    position: position,
-                    title: moduleData.module_name,
-                    color: moduleData.module_color || '#007bff',
-                });
-            }
+    // Публичные методы для работы с контекстным меню
+    public showContextMenu(items: any[], position: [number, number]): void {
+        this.contextMenuService.showCustomMenu({
+            items: items,
+            position: position,
         });
     }
 
-    private handleTimeSliderChange(data: any): void {
-        console.log('MapService: Time slider changed', data);
-        // TODO: Реализовать фильтрацию данных по времени
+    public hideContextMenu(): void {
+        // Контекстное меню автоматически скрывается при клике на карту
     }
 
     // Утилиты
@@ -229,6 +224,7 @@ export class MapService {
         this.markerService.destroy();
         this.traceService.destroy();
         this.layerService.destroy();
+        this.contextMenuService.destroy();
 
         if (this.map) {
             this.map.remove();

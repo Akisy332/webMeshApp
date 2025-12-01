@@ -1,0 +1,261 @@
+/* Стили для временного слайдера на карте */
+.leaflet-control-time-slider {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    border-radius: 12px;
+    padding: 12px 15px;
+    margin: 10px;
+    z-index: 1000;
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: auto;
+    width: 95%;
+    max-width: 1200px;
+    min-width: 300px;
+}
+
+.time-slider-toggle {
+    background: none;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.time-slider-toggle:hover {
+    background: #f0f0f0;
+}
+
+.time-slider-body {
+    display: block;
+}
+
+/* КОМПАКТНАЯ ГРУППА СЛАЙДЕРА */
+.slider-compact-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    width: 100%;
+}
+
+.time-label {
+    font-size: 11px;
+    color: #666;
+    font-weight: 500;
+    flex-shrink: 0;
+    min-width: 60px;
+    text-align: center;
+}
+
+.slider-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.time-slider {
+    flex: 1;
+    margin: 0;
+    height: 4px;
+    border-radius: 2px;
+    background: #e9ecef;
+    outline: none;
+}
+
+.current-time-container {
+    flex-shrink: 0;
+}
+
+.time-current {
+    font-weight: bold;
+    font-size: 12px;
+    color: #333;
+    background: rgba(248, 249, 250, 0.9);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    min-width: 70px;
+    text-align: center;
+}
+
+/* СТИЛИ ДЛЯ ГРУППЫ КНОПОК В ЦЕНТРЕ СНИЗУ */
+.time-controls-group {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+}
+
+.time-control-btn {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    min-width: 40px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.time-control-btn:hover {
+    background: #f8f9fa;
+    border-color: #007bff;
+}
+
+.time-play {
+    background: #28a745;
+    color: white;
+    border-color: #28a745;
+    min-width: 50px;
+}
+
+.time-play:hover {
+    background: #218838;
+    border-color: #1e7e34;
+}
+
+.time-prev::before {
+    content: '◀';
+}
+
+.time-next::before {
+    content: '▶';
+}
+
+.time-reset {
+    background: #6c757d;
+    color: white;
+    border-color: #6c757d;
+}
+
+.time-reset:hover {
+    background: #5a6268;
+    border-color: #545b62;
+}
+
+/* Стили для ползунка */
+.time-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 16px;
+    width: 16px;
+    border-radius: 50%;
+    background: #007bff;
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.time-slider::-moz-range-thumb {
+    height: 16px;
+    width: 16px;
+    border-radius: 50%;
+    background: #007bff;
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.time-slider::-webkit-slider-track {
+    height: 4px;
+    border-radius: 2px;
+    background: #e9ecef;
+}
+
+.time-slider::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: #e9ecef;
+}
+
+/* Прогресс для Webkit */
+.time-slider::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(to right, #007bff, #007bff) no-repeat, #e9ecef;
+    background-size: var(--slider-progress, 0%) 100%;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+    .leaflet-control-time-slider {
+        padding: 10px 12px;
+        border-radius: 10px;
+        bottom: 10px;
+        width: calc(100% - 20px) !important;
+    }
+
+    .slider-compact-group {
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+
+    .time-label {
+        font-size: 10px;
+        min-width: 50px;
+    }
+
+    .slider-main {
+        gap: 8px;
+    }
+
+    .time-current {
+        font-size: 11px;
+        min-width: 60px;
+        padding: 3px 6px;
+    }
+
+    .time-controls-group {
+        gap: 4px;
+    }
+
+    .time-control-btn {
+        padding: 5px 8px;
+        min-width: 35px;
+        font-size: 11px;
+    }
+
+    .time-play {
+        min-width: 40px;
+    }
+}
+
+/* Для очень маленьких экранов */
+@media (max-width: 480px) {
+    .slider-compact-group {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .time-label {
+        min-width: 45px;
+        font-size: 9px;
+    }
+
+    .slider-main {
+        order: 3;
+        width: 100%;
+        margin-top: 4px;
+    }
+
+    .time-control-btn {
+        padding: 4px 6px;
+        min-width: 30px;
+        font-size: 10px;
+    }
+
+    .time-play {
+        min-width: 35px;
+    }
+}

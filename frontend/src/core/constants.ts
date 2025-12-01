@@ -11,7 +11,6 @@ export const EventTypes = {
     ROUTE_SLIDER: {
         TIME_SLIDER_CHANGED: 'time_slider_changed',
         TIME_RANGE_CHANGED: 'time_range_changed',
-        TIME_SLIDER_TOGGLE: 'time_slider_toggle',
         TIME_SLIDER_SET: 'time_slider_set',
     },
     SESSION: {
@@ -24,6 +23,7 @@ export const EventTypes = {
         MARKER_CLICK: 'map:marker_click',
         MAP_CLICK: 'map:click',
         ZOOM_CHANGED: 'map:zoom_changed',
+        TIME_SLIDER_TOGGLE: 'map:time_slider_toggle',
     },
 } as const;
 
